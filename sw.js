@@ -1,6 +1,6 @@
 const scope = self.registration.scope;
 const prefix = 'turbo-mare:' + scope + ':';
-const cacheName = prefix + 'dc9dd66e5e2571a07fd9';
+const cacheName = prefix + '0b44de5289517c9fe3e1';
 const shell = new URL('index.html', scope).href;
 const assets = ["index.html","manifest.webmanifest","icons/piloto-192.png","icons/piloto-512.png","icons/piloto-maskable.png","icons/apple-touch-icon.png"].map(file => new URL(file, scope).href);
 

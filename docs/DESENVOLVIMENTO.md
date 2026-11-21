@@ -32,11 +32,13 @@ Recorde, som, qualidade gráfica e piloto escolhido são preferências locais do
 
 ## Salas online
 
-`src/rooms.js` cria um canal com identificador aleatório de 128 bits no relay WSS. O convite contém o canal e o identificador que o relay atribuiu ao anfitrião. A conexão só é aberta quando a pessoa cria ou entra em uma sala. O relay transporta os apelidos, comandos, posições e eventos da partida. O site e o PWA continuam hospedados no GitHub Pages. [Serviço Itty Sockets](https://ittysockets.com/docs/getting-started)
+`src/rooms.js` cria um canal com identificador aleatório de 128 bits no relay WSS. O convite identifica a sala e continua válido quando outro piloto assume. Convites antigos, com o identificador do anfitrião após um ponto, ainda abrem sessões da versão anterior. A conexão só é aberta quando a pessoa cria ou entra em uma sala. O relay transporta os apelidos, comandos, posições e eventos da partida. O site e o PWA continuam hospedados no GitHub Pages. [Serviço Itty Sockets](https://ittysockets.com/docs/getting-started)
 
-A simulação de `src/game.js` roda no navegador do anfitrião. Os convidados enviam direção, salto e mergulho. O anfitrião calcula impactos, checkpoints e chegadas, e transmite o estado até 20 vezes por segundo. Os convidados interpolam as posições para a câmera e as animações. Cada conexão controla apenas o piloto atribuído a ela. O host precisa manter o jogo em primeiro plano, especialmente no celular.
+A simulação de `src/game.js` roda no navegador do anfitrião. Os convidados enviam direção, salto e mergulho. O anfitrião calcula impactos, checkpoints e chegadas, e transmite o estado até 20 vezes por segundo. Os convidados interpolam as posições para a câmera e as animações. Cada conexão controla apenas o piloto atribuído a ela.
 
-O teste abaixo usa dois perfis isolados do Chrome e um convite novo no relay real. Ele verifica que cada jogador vê o outro avançar, que o convidado pode sair e voltar à sala para a revanche e que a saída do anfitrião encerra a sessão. Para testar localmente, sirva a raiz por HTTP e substitua a URL por `http://localhost:8000/`.
+Ao ocultar a aba, o anfitrião envia o estado da pista e transfere a simulação a um participante visível. Uma saída voluntária também envia o estado final. Se o navegador fechar abruptamente, os participantes usam o último estado recebido. Quando a conexão permanece aberta e a aba para de responder, um participante ativo pode assumir após alguns segundos. O relay ordena as solicitações e cada troca incrementa a geração da sala para descartar mensagens atrasadas. O sucessor preserva cronômetro, posições, velocidades, checkpoints, anéis e chegadas. A corrida precisa de pelo menos um piloto com o jogo ativo.
+
+O teste abaixo usa três perfis isolados do Chrome e um convite novo no relay real. Ele congela a aba de quem criou a sala, verifica o avanço dos convidados, testa a saída dos anfitriões e acompanha o último piloto. Para testar localmente, sirva a raiz por HTTP e substitua a URL por `http://localhost:8000/`.
 
 ```sh
 node tests/salas.cjs https://alexandremocmg.github.io/turbo_mare/
@@ -60,7 +62,7 @@ Execute os comandos a partir da raiz.
 
 ```sh
 node scripts/build.cjs --check
-node --test tests/corrida.test.cjs tests/kraken.test.cjs
+node --test tests/corrida.test.cjs tests/kraken.test.cjs tests/multiplayer.test.cjs tests/continuidade.test.cjs
 node tests/navegador.cjs
 ```
 

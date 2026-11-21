@@ -974,7 +974,7 @@ function run() {
       clearControls();
       if ($('race-exit').open) $('race-exit').close();
       else {
-        $('exit-info').textContent=online.host?'Sair encerra a sala para todos os pilotos.':'A corrida continuará para os outros pilotos.';
+        $('exit-info').textContent='Os pilotos que ficarem na sala poderão terminar esta corrida.';
         $('race-exit').showModal();
       }
       return;
@@ -1372,7 +1372,7 @@ function run() {
     if (online) {
       $('slots').previousElementSibling.textContent='Chegada';
       $('slots').textContent=finishers.length+' / '+racers.filter(r=>!r.left || r.result).length;
-      const labels=roomOrder().map((r,i)=>(i+1)+'º  '+r.name+(r===player?' (você)':'')+' · '+roomScore(r));
+      const labels=roomOrder().map((r,i)=>(i+1)+'º  '+r.name+(r===player?' (você)':'')+' · '+roomScore(r)+(r.i===online.leaderSlot?' · Anfitrião':''));
       const signature=JSON.stringify(labels);
       if(signature!==rankSignature) {
         rankSignature=signature;
@@ -1441,7 +1441,7 @@ function run() {
       gapHint=true;
       notify(matchMedia('(pointer:coarse)').matches?'Pule para atravessar o vão':'Espaço para atravessar o vão');
     }
-    if (online && (racers.every(r=>r.result||r.left) || racers.filter(r=>!r.left).length<2 || elapsed>=TIME_LIMIT)) {
+    if (online && (racers.every(r=>r.result||r.left) || elapsed>=TIME_LIMIT)) {
       room.finish(roomOrder().map(r=>({name:r.name,slot:r.i,score:roomScore(r)})));
       return;
     }
@@ -2019,14 +2019,17 @@ function run() {
 
   function snapshot() {
     return {mode, elapsed, countdown, obstacleTime, pads:springs.map(p=>p.firedAt),
+      motion:racers.map(r=>[r.coyote,r.springLock,r.nextJump,Number(!!r.dove)]),
       racers:racers.map(r=>[...netFields.map(k=>Math.round((r[k]||0)*1000)/1000),Number(r.ground),
         [...r.gates].reduce((mask,n)=>mask|(1<<n),0),Number(r.left)])};
   }
-  function applySnapshot(s) {
+  function applySnapshot(s, exact=false) {
     if(!online || !['race','countdown'].includes(s?.mode) || ![s.elapsed,s.countdown,s.obstacleTime].every(Number.isFinite) ||
         !Array.isArray(s.racers) || s.racers.length!==racers.length ||
         !s.racers.every(row=>Array.isArray(row)&&row.length===netFields.length+3&&row.every(Number.isFinite)) ||
         !Array.isArray(s.pads) || s.pads.length!==springs.length || !s.pads.every(Number.isFinite)) return;
+    if(s.motion && (!Array.isArray(s.motion) || s.motion.length!==racers.length ||
+      !s.motion.every(row=>Array.isArray(row)&&row.length===4&&row.every(Number.isFinite)))) return;
     if(mode!==s.mode) setMode(s.mode);
     elapsed=s.elapsed; countdown=s.countdown; obstacleTime=s.obstacleTime;
     if (online.stalled) { online.stalled=false; $('toast').hidden=true; }
@@ -2036,11 +2039,12 @@ function run() {
     racers.forEach((r,i)=>{
       const row=s.racers[i];
       const target={x:row[0],y:row[1],z:row[2]};
-      if(!r.target || Math.hypot(r.x-target.x,r.z-target.z)>3) Object.assign(r,target);
+      if(exact || !r.target || Math.hypot(r.x-target.x,r.z-target.z)>3) Object.assign(r,target);
       r.target=target;
       for(let n=3;n<netFields.length;n++) r[netFields[n]]=row[n];
       r.cp=clamp(Math.trunc(r.cp),0,checkpoints.length-1);
-      r.ground=!!row[netFields.length]; r.left=!!row[netFields.length+2];
+      r.ground=!!row[netFields.length]; r.left=online.departed.has(r.i)||!!row[netFields.length+2];
+      if(s.motion) [r.coyote,r.springLock,r.nextJump,r.dove]=s.motion[i];
       r.gates=new Set(gates.map((_,n)=>n).filter(n=>row[netFields.length+1] & (1<<n)));
     });
     if (mode==='race') {
@@ -2058,13 +2062,14 @@ function run() {
     $('count').textContent=count>0?count:'VAI!';
     if (mode==='countdown' && lastCount!==count) {lastCount=count;tone(count>0?370:735,.13,'triangle');}
     updateHUD();
+    return true;
   }
   function clientStep(dt) {
     if(notice>0 && (notice-=dt)<=0) $('toast').hidden=true;
     online.age=(online.age||0)+dt;
     if (online.age>5 && !online.stalled) {
       online.stalled=true; notice=0;
-      $('toast').textContent='Aguardando o anfitrião retomar a corrida…'; $('toast').hidden=false;
+      $('toast').textContent='Sincronizando a corrida com os outros pilotos…'; $('toast').hidden=false;
     }
     if (online.age<.12 && mode==='race') {obstacleTime+=dt;updateObstacles(obstacleTime);}
     for(const r of racers) if(r.target) {
@@ -2078,9 +2083,25 @@ function run() {
   if (window.createTurboRoom) {
     room=window.createTurboRoom({
       pilot:()=>pilotIndex,
-      begin(session) {online=session; training=false;rankSignature='';lastNetSend=-100;startRace();},
+      begin(session) {online={...session,departed:new Set()}; training=false;rankSignature='';lastNetSend=-100;startRace();},
       apply:applySnapshot,
-      gone(seat) {const r=racers.find(r=>r.i===seat);if(r)r.left=true;},
+      checkpoint:()=>online?snapshot():null,
+      authority(isHost,state,seat) {
+        if(!online) return;
+        if(state) applySnapshot(state,true);
+        online.host=isHost; online.leaderSlot=seat;
+        notify(isHost?'Você assumiu a sala.':(racers.find(r=>r.i===seat)?.name||'Outro piloto')+' assumiu a sala.');
+        updateHUD();
+        lastNetSend=-100;
+        lastStamp=undefined;
+        accumulator=0;
+      },
+      gone(seat) {
+        if(!online) return;
+        online.departed.add(seat);
+        const r=racers.find(r=>r.i===seat);
+        if(r) r.left=true;
+      },
       reset() {
         online=null;
         if ($('race-exit').open) $('race-exit').close();

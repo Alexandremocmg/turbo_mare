@@ -31,7 +31,11 @@ async function main() {
   let port;
   for (let i = 0; i < 150 && !port; i++) {
     if (chrome.exitCode !== null) throw new Error('Chrome encerrou durante a inicialização.');
-    if (fs.existsSync(file)) port = Number(fs.readFileSync(file, 'utf8').split('\n')[0]);
+    try {
+      port = Number(fs.readFileSync(file, 'utf8').split('\n')[0]);
+    } catch (error) {
+      if (!['ENOENT','EBUSY','EPERM'].includes(error.code)) throw error;
+    }
     if (!port) await sleep(200);
   }
   if (!port) throw new Error('Tempo limite ao abrir o navegador de teste.');
@@ -72,7 +76,8 @@ async function main() {
       if (await evaluate(expression)) return;
       await sleep(160);
     } while (Date.now() < deadline);
-    throw new Error('Tempo limite: ' + expression);
+    const ui=await evaluate("[document.readyState,document.body?.dataset.mode,document.getElementById('room-status')?.textContent,document.getElementById('race-list')?.textContent]");
+    throw new Error('Tempo limite: ' + expression + ' · ' + JSON.stringify(ui) + ' · ' + errors.map(e=>e.exception?.description||e.text).join(' / '));
   }
   const click = id => evaluate('document.getElementById(' + JSON.stringify(id) + ').click()');
   async function screenshot(name) {
@@ -85,7 +90,7 @@ async function main() {
 
   await send('Runtime.enable');
   await send('Page.enable');
-  if (['--host','--guest'].includes(process.argv[2])) {
+  if (['--host','--guest','--friend'].includes(process.argv[2])) {
     await require('./salas.cjs').verify({send,evaluate,until,click,key,screenshot});
     return;
   }

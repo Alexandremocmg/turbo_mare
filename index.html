@@ -288,16 +288,20 @@ window.createTurboRoom = function createTurboRoom(game) {
   const el = id => document.getElementById(id);
   const dialog = el('room');
   const limit = 6;
-  const prefix = 'turbo-mare-v1-';
-  const links = new Map();
+  // New rooms have a stable channel independent of the connection running the physics.
+  const leaseMs = 5000;
+  const uidPattern = /^[A-Za-z0-9_-]{4,32}$/;
+  const active = () => ['lobby','race','results'].includes(stage);
   const controls = new Map();
   let members = [], socket = null, hostId = '', host = false, slot = -1;
   let stage = 'closed', roomKey = '', round = 0, timer = 0, standings = [];
+  let selfId='', legacy=false, term=0, monitor=0, lastLeaderStamp=0, lastSeen=0, latest=null;
+  let pendingStart=false, pendingEnd=false, lastHello=0;
   const nickname = text => (typeof text === 'string' ? text.trim().replace(/[\u0000-\u001f\u007f]/g,'').slice(0,18) : '') || 'Piloto';
   const validPilot = value => Number.isInteger(value) && value >= 0 && value < 4 ? value : 0;
   const invited = () => new URLSearchParams(location.hash.slice(1)).get('sala');
-  const validKey = key => typeof key === 'string' && /^[a-f0-9]{32}\.[A-Za-z0-9_-]{4,32}$/.test(key);
-  const invite = () => { const url = new URL(location.href); url.hash = 'sala=' + roomKey + '.' + hostId; return url.href; };
+  const validKey = key => typeof key === 'string' && /^[a-f0-9]{32}(?:\.[A-Za-z0-9_-]{4,32})?$/.test(key);
+  const invite = () => { const url = new URL(location.href); url.hash = 'sala=' + roomKey + (legacy ? '.'+hostId : ''); return url.href; };
   function modal() { if (!dialog.open) dialog.showModal(); }
   function note(text) { el('room-status').textContent = text; }
   function send(message, target) {
@@ -307,14 +311,15 @@ window.createTurboRoom = function createTurboRoom(game) {
     const address = target ? '\u001f'+target+'\u001f' : '';
     socket.send(address + JSON.stringify(message));
   }
-  function broadcast(message) { if (links.size) send(message); }
-  function sync() { broadcast({t:'lobby', members}); }
+  function publish(message) { send({...message,term}); }
+  function sync() { publish({t:'lobby',members}); }
+  const member = uid => members.find(m=>m.uid===uid);
   function paintList() {
     const rows = stage === 'results' ? standings : members;
     el('room-list').replaceChildren(...rows.map(m => {
       const item = document.createElement('li'), name = document.createElement('strong'), detail = document.createElement('span');
       name.textContent = m.name + (m.slot === slot ? ' (você)' : '');
-      detail.textContent = stage === 'results' ? m.score : (m.slot === 0 ? 'Anfitrião' : 'Conectado');
+      detail.textContent = stage === 'results' ? m.score : ((legacy ? m.slot===0 : m.uid===hostId) ? 'Anfitrião' : 'Conectado');
       item.append(name,detail);
       return item;
     }));
@@ -336,19 +341,19 @@ window.createTurboRoom = function createTurboRoom(game) {
   }
   function disconnect() {
     const old = socket;
-    socket = null; links.clear(); controls.clear();
-    clearTimeout(timer);
+    socket = null; controls.clear(); latest=null; pendingStart=pendingEnd=false;
+    clearTimeout(timer); clearInterval(monitor);
     if (old) old.close();
   }
   function fail(text) {
-    const wasHost = host;
+    const retryAsGuest = active() && !legacy;
     disconnect(); members = []; standings = []; stage = 'failed';
-    if (wasHost) roomKey = '';
+    if(retryAsGuest) host=false;
+    else if(host) roomKey='';
     game.reset(); modal(); paint(); note(text);
   }
   function leave() {
-    if (host) broadcast({t:'closed'});
-    else send({t:'bye'},hostId);
+    if (active()) announceExit();
     disconnect(); stage = 'closed'; host = false; slot = -1; roomKey = ''; members = []; standings = [];
     if (invited()) { const url = new URL(location.href); url.hash = ''; history.replaceState(null,'',url); }
     if (dialog.open) dialog.close();
@@ -356,40 +361,84 @@ window.createTurboRoom = function createTurboRoom(game) {
   }
   function setup(key) {
     if (stage !== 'closed') return;
-    [roomKey,hostId] = validKey(key) ? key.split('.') : ['', ''];
-    host = !roomKey; stage = 'setup';
+    [roomKey,hostId=''] = validKey(key) ? key.split('.') : ['', ''];
+    legacy=!!hostId; host = !roomKey; stage = 'setup';
     modal(); paint();
     note(roomKey ? 'Você recebeu um convite. Escolha seu apelido para entrar.' : 'Crie uma sala para até seis pessoas e compartilhe o link.');
     if (key && !roomKey) note('Convite inválido. Peça um novo link ou crie sua própria sala.');
     el('room-nick').focus();
   }
-  function removeGuest(uid) {
-    if (!links.has(uid)) return;
-    const seat = links.get(uid);
-    links.delete(uid); controls.delete(seat);
-    members = members.filter(m=>m.slot !== seat);
-    if (stage === 'race') game.gone(seat);
-    else { sync(); paint(); }
+  function heard(stamp) {
+    lastLeaderStamp=stamp;
+    lastSeen=performance.now();
+  }
+  function remember(state,exact=false) {
+    if(stage==='race' && state && game.apply(state,exact)) latest=state;
+  }
+  function transfer(next,stamp) {
+    if (!next || next.uid===hostId) return;
+    term++;
+    hostId=next.uid; host=selfId===hostId;
+    pendingStart=pendingEnd=false; controls.clear(); heard(stamp);
+    if(stage==='race') game.authority(host,latest,next.slot);
+    else paint();
+  }
+  function removeMember(uid,stamp) {
+    const departed=member(uid);
+    if(!departed) return;
+    members=members.filter(m=>m!==departed);
+    controls.delete(departed.slot);
+    if(stage==='race') game.gone(departed.slot);
+    if(uid===hostId) {
+      // Relay leave events have a common order. Slot order is stable even when a tab is suspended.
+      const next=members.slice().sort((a,b)=>Number(a.hidden)-Number(b.hidden)||a.slot-b.slot)[0];
+      transfer(next,stamp);
+    } else if(stage!=='race') paint();
+  }
+  function announceExit() {
+    if(legacy) {send({t:'bye'},hostId);return;}
+    publish({t:'bye',round,v:host && stage==='race'?game.checkpoint():null});
+  }
+  function presence() {
+    if(legacy || !active()) return;
+    const next=host && document.hidden ? members.filter(m=>m.uid!==selfId && !m.hidden).sort((a,b)=>a.slot-b.slot)[0] : null;
+    publish({t:'presence',hidden:document.hidden,to:next?.uid,round,v:next && stage==='race'?game.checkpoint():null});
+  }
+  function monitorRoom() {
+    if(stage==='connecting' && !host && selfId && performance.now()-lastHello>1500) {hello();return;}
+    if(legacy || !active()) return;
+    if(host) {
+      if(stage!=='race') publish({t:'pulse'});
+      return;
+    }
+    if(!document.hidden && (member(hostId)?.hidden || performance.now()-lastSeen>=leaseMs))
+      publish({t:'claim'});
+  }
+  function hello() {
+    lastHello=performance.now();
+    send({t:'hello',name:nickname(el('room-nick').value),pilot:game.pilot(),hidden:document.hidden},legacy?hostId:null);
   }
   function hostMessage(uid, m) {
     if (!m || typeof m !== 'object') return;
     if (m.t === 'hello') {
-      if (links.has(uid)) return;
-      const reason = stage === 'race' ? 'A corrida já começou. Tente de novo após a chegada.' :
-        members.length >= limit ? 'A sala está cheia.' : '';
-      if (reason) { send({t:'reject',reason},uid); return; }
-      if (!['lobby','results'].includes(stage)) return;
-      let seat = 1; while (members.some(member=>member.slot === seat)) seat++;
-      links.set(uid,seat);
-      members.push({slot:seat,name:nickname(m.name),pilot:validPilot(m.pilot)});
-      send({t:'welcome',slot:seat,members},uid); sync(); paint();
-      return;
+      if (!['lobby','race','results'].includes(stage)) return;
+      if (stage==='race' || pendingStart) {send({t:'reject',reason:'A corrida já começou. Tente de novo após a chegada.'},uid);return;}
+      let guest=member(uid);
+      if (!guest) {
+        if(members.length>=limit) {send({t:'reject',reason:'A sala está cheia.'},uid);return;}
+        let seat=0; while(members.some(m=>m.slot===seat)) seat++;
+        guest={uid,slot:seat,name:nickname(m.name),pilot:validPilot(m.pilot),hidden:!!m.hidden};
+        members.push(guest);
+      }
+      sync();
+      send({t:'welcome',slot:guest.slot,members,term,round},uid);
+      paint();return;
     }
-    if (!links.has(uid)) return;
-    if (m.t === 'bye') { removeGuest(uid); return; }
-    if (m.t === 'input' && stage === 'race' && m.round === round &&
+    const guest=member(uid);
+    if (!guest || guest.uid===selfId) return;
+    if (m.t === 'input' && stage === 'race' && m.round === round && m.term===term &&
         Array.isArray(m.v) && m.v.length === 4 && m.v.every(Number.isFinite)) {
-      const seat = links.get(uid), [x,z,j,d] = m.v, previous = controls.get(seat);
+      const seat = guest.slot, [x,z,j,d] = m.v, previous = controls.get(seat);
       controls.set(seat,{x:Math.max(-1,Math.min(1,x)),z:Math.max(-1,Math.min(1,z)),
         jump:Math.max(previous?.jump||0,j===1?.145:0),dive:Math.max(previous?.dive||0,d===1?.14:0),at:performance.now()});
     }
@@ -397,30 +446,65 @@ window.createTurboRoom = function createTurboRoom(game) {
   function validMembers(list) {
     return Array.isArray(list) && list.length > 0 && list.length <= limit &&
       list.every(m => m && Number.isInteger(m.slot) && m.slot >= 0 && m.slot < limit && typeof m.name === 'string' && m.name.length <= 18 && validPilot(m.pilot) === m.pilot) &&
-      new Set(list.map(m => m.slot)).size === list.length && list.some(m => m.slot === 0);
+      new Set(list.map(m => m.slot)).size === list.length &&
+      (legacy || (list.every(m=>typeof m.uid==='string' && uidPattern.test(m.uid)) && new Set(list.map(m=>m.uid)).size===list.length));
   }
   function begin() {
-    controls.clear(); stage = 'race'; standings = [];
+    controls.clear(); latest=null; pendingStart=pendingEnd=false; stage = 'race'; standings = [];
     if (dialog.open) dialog.close();
-    game.begin({host,slot,members:members.map(m=>({...m}))});
+    game.begin({host,slot,leaderSlot:legacy?0:member(hostId).slot,members:members.map(m=>({...m}))});
   }
   function result(rows) {
-    stage = 'results'; standings = rows;
+    stage = 'results'; standings = rows; latest=null; pendingStart=pendingEnd=false;
     game.reset(); modal(); paint();
   }
-  function receive(m) {
-    if (!m || typeof m !== 'object') return;
-    if (m.t === 'reject') { fail(String(m.reason).slice(0,120)); return; }
-    if (m.t === 'closed') { fail('O anfitrião encerrou a sala.'); return; }
-    if (m.t === 'welcome' && stage === 'connecting' && validMembers(m.members) && m.members.some(p=>p.slot===m.slot && p.slot>0)) {
-      clearTimeout(timer); slot = m.slot; members = m.members; stage = 'lobby'; paint();
-    } else if (m.t === 'lobby' && ['lobby','results'].includes(stage) && validMembers(m.members)) {
-      members = m.members; paint();
-    } else if (m.t === 'go' && ['lobby','results'].includes(stage) && validMembers(m.members) && m.members.some(p=>p.slot===slot) && Number.isInteger(m.round)) {
-      members = m.members; round = m.round; begin();
-    } else if (m.t === 'state' && stage === 'race' && m.round === round) {
-      game.apply(m.v);
-    } else if (m.t === 'end' && stage === 'race' && m.round === round && Array.isArray(m.rows) && m.rows.length<=limit && m.rows.every(r=>r && typeof r.name==='string' && typeof r.score==='string')) {
+  function receive(uid,m,stamp) {
+    if(!m || typeof m!=='object') return;
+    if(stage==='connecting') {
+      if(host || (legacy && uid!==hostId)) return;
+      if(m.t==='reject') {fail(String(m.reason).slice(0,120));return;}
+      if(m.t!=='welcome' || !validMembers(m.members) || !m.members.some(p=>p.slot===m.slot && (legacy || p.uid===selfId))) return;
+      if(!legacy && (!m.members.some(p=>p.uid===uid) || !Number.isSafeInteger(m.term))) return;
+      clearTimeout(timer); hostId=uid;slot=m.slot;members=m.members;term=m.term||0;round=m.round||0;
+      stage='lobby';heard(stamp);paint();return;
+    }
+    if (!active()) return;
+    if (!legacy) {
+      if(m.t==='hello') {if(host && uid!==selfId) hostMessage(uid,m);return;}
+      const sender=member(uid);
+      if(!sender) return;
+      if(m.t==='bye') {
+        if(uid===hostId && m.term===term && m.round===round && m.v) remember(m.v,true);
+        removeMember(uid,stamp);return;
+      }
+      if(m.t==='presence') {
+        sender.hidden=!!m.hidden;
+        if(uid===hostId && m.term===term && sender.hidden && member(m.to)) {
+          if(m.round===round && m.v) remember(m.v,true);
+          transfer(member(m.to),stamp);
+        } else if(!host && !document.hidden && member(hostId)?.hidden && uid!==selfId) monitorRoom();
+        return;
+      }
+      if(m.term!==term) return;
+      if(m.t==='claim') {
+        // All replicas arbitrate using the relay timestamp and the same echoed message stream.
+        if(uid!==hostId && (member(hostId)?.hidden || stamp-lastLeaderStamp>=leaseMs)) transfer(sender,stamp);
+        return;
+      }
+      if(m.t==='input') {if(host)hostMessage(uid,m);return;}
+    }
+    if(uid!==hostId) return;
+    if(m.t==='closed' && legacy) {fail('O anfitrião encerrou esta sala da versão anterior.');return;}
+    if(['state','go','end','lobby','pulse'].includes(m.t)) heard(stamp);
+    if(m.t==='lobby' && ['lobby','results'].includes(stage) && validMembers(m.members)) {
+      // The host already applied join/leave locally. Older echoes must not undo a newer admission.
+      if(!host) members=m.members;
+      paint();
+    } else if(m.t==='go' && ['lobby','results'].includes(stage) && validMembers(m.members) && m.members.some(p=>p.slot===slot) && Number.isInteger(m.round)) {
+      members=m.members;round=m.round;begin();
+    } else if(m.t==='state' && stage==='race' && m.round===round && !host) {
+      remember(m.v);
+    } else if(m.t==='end' && stage==='race' && m.round===round && Array.isArray(m.rows) && m.rows.length<=limit && m.rows.every(r=>r && typeof r.name==='string' && typeof r.score==='string')) {
       result(m.rows);
     }
   }
@@ -433,11 +517,13 @@ window.createTurboRoom = function createTurboRoom(game) {
     const name = nickname(el('room-nick').value);
     try { localStorage.setItem('mare-apelido',name); } catch {}
     if (host) roomKey = Array.from(crypto.getRandomValues(new Uint8Array(16)), n=>n.toString(16).padStart(2,'0')).join('');
+    selfId=''; term=0; round=0; pendingStart=pendingEnd=false;
     slot = host ? 0 : -1; stage = 'connecting'; paint(); note('Conectando à sala…');
     let current;
-    try { current = new WebSocket('wss://itty.ws/c/'+prefix+roomKey+'?announce=true&list=true'); }
+    try { current = new WebSocket('wss://itty.ws/c/turbo-mare-'+(legacy?'v1-':'v2-')+roomKey+'?announce=true&list=true'+(legacy?'':'&echo=true')); }
     catch { fail('Não foi possível abrir a conexão. Tente novamente.'); return; }
     socket = current;
+    monitor=setInterval(monitorRoom,1100);
     timer = setTimeout(()=>{if(socket===current) fail('A conexão demorou. Confira o convite e tente novamente.');},25000);
     current.onmessage = event => {
       if (socket !== current || typeof event.data !== 'string' || event.data.length > 24000) return;
@@ -446,19 +532,20 @@ window.createTurboRoom = function createTurboRoom(game) {
       if (!packet || typeof packet !== 'object') return;
       const {uid,type,self,message} = packet;
       if (typeof uid !== 'string') return;
+      const stamp=Number(packet.date);
+      if(!Number.isFinite(stamp)) return;
       if (type === 'join' && self && stage === 'connecting') {
+        selfId=uid;
         if (host) {
-          hostId=uid; clearTimeout(timer); members=[{slot:0,name,pilot:game.pilot()}]; stage='lobby'; paint();
-        } else if (Array.isArray(packet.users) && !packet.users.some(u=>u.uid===hostId)) {
-          fail('Sala não encontrada. Peça um novo convite ao anfitrião.');
-        } else send({t:'hello',name,pilot:game.pilot()},hostId);
+          hostId=uid;clearTimeout(timer);members=[{uid,slot:0,name,pilot:game.pilot(),hidden:document.hidden}];
+          stage='lobby';heard(stamp);paint();
+        } else if (Array.isArray(packet.users) && !packet.users.some(u=>legacy?u.uid===hostId:u.uid!==selfId)) {
+          fail('Sala não encontrada. Peça um novo convite.');
+        } else hello();
       } else if (type === 'leave') {
-        if (host) removeGuest(uid);
-        else if (uid === hostId) fail('O anfitrião encerrou a sala.');
-      } else if (message && !type) {
-        if (host) hostMessage(uid,message);
-        else if (uid === hostId) receive(message);
-      }
+        if(legacy && uid===hostId) fail('O anfitrião encerrou esta sala da versão anterior.');
+        else if(!legacy && active()) removeMember(uid,stamp);
+      } else if (message && !type) receive(uid,message,stamp);
     };
     current.onclose = ()=>{if(socket===current)fail('A conexão da sala terminou. Confira a rede e entre novamente.');};
     current.onerror = ()=>{if(socket===current)fail('Não foi possível conectar ao serviço de salas. Tente novamente.');};
@@ -474,14 +561,17 @@ window.createTurboRoom = function createTurboRoom(game) {
   });
   el('room-start').addEventListener('click',()=>{
     if (!host || !['lobby','results'].includes(stage) || members.length < 2) return;
-    round++; broadcast({t:'go',round,members}); begin();
+    if(pendingStart) return;
+    pendingStart=true; publish({t:'go',round:round+1,members});
   });
+  document.addEventListener('visibilitychange',presence);
+  window.addEventListener('pagehide',e=>{if(!e.persisted && active()) announceExit();});
   window.addEventListener('hashchange',()=>{if(invited()) setup(invited());});
   if (invited() !== null) setup(invited());
   return {
     leave,
-    input(v) { send({t:'input',round,v},hostId); },
-    state(v) { broadcast({t:'state',round,v}); },
+    input(v) { send({t:'input',round,term,v},hostId); },
+    state(v) { latest=v; if(members.length>1) publish({t:'state',round,v}); },
     control(seat,dt) {
       const c = controls.get(seat);
       if (!c || performance.now()-c.at > 1000) return [0,0,false,false];
@@ -490,7 +580,10 @@ window.createTurboRoom = function createTurboRoom(game) {
       return out;
     },
     consume(seat,action) {const c=controls.get(seat);if(c)c[action]=0;},
-    finish(rows) { broadcast({t:'end',round,rows}); result(rows); }
+    finish(rows) {
+      if(pendingEnd) return;
+      pendingEnd=true;publish({t:'end',round,rows});
+    }
   };
 };
 </script>
@@ -1471,7 +1564,7 @@ function run() {
       clearControls();
       if ($('race-exit').open) $('race-exit').close();
       else {
-        $('exit-info').textContent=online.host?'Sair encerra a sala para todos os pilotos.':'A corrida continuará para os outros pilotos.';
+        $('exit-info').textContent='Os pilotos que ficarem na sala poderão terminar esta corrida.';
         $('race-exit').showModal();
       }
       return;
@@ -1869,7 +1962,7 @@ function run() {
     if (online) {
       $('slots').previousElementSibling.textContent='Chegada';
       $('slots').textContent=finishers.length+' / '+racers.filter(r=>!r.left || r.result).length;
-      const labels=roomOrder().map((r,i)=>(i+1)+'º  '+r.name+(r===player?' (você)':'')+' · '+roomScore(r));
+      const labels=roomOrder().map((r,i)=>(i+1)+'º  '+r.name+(r===player?' (você)':'')+' · '+roomScore(r)+(r.i===online.leaderSlot?' · Anfitrião':''));
       const signature=JSON.stringify(labels);
       if(signature!==rankSignature) {
         rankSignature=signature;
@@ -1938,7 +2031,7 @@ function run() {
       gapHint=true;
       notify(matchMedia('(pointer:coarse)').matches?'Pule para atravessar o vão':'Espaço para atravessar o vão');
     }
-    if (online && (racers.every(r=>r.result||r.left) || racers.filter(r=>!r.left).length<2 || elapsed>=TIME_LIMIT)) {
+    if (online && (racers.every(r=>r.result||r.left) || elapsed>=TIME_LIMIT)) {
       room.finish(roomOrder().map(r=>({name:r.name,slot:r.i,score:roomScore(r)})));
       return;
     }
@@ -2516,14 +2609,17 @@ function run() {
 
   function snapshot() {
     return {mode, elapsed, countdown, obstacleTime, pads:springs.map(p=>p.firedAt),
+      motion:racers.map(r=>[r.coyote,r.springLock,r.nextJump,Number(!!r.dove)]),
       racers:racers.map(r=>[...netFields.map(k=>Math.round((r[k]||0)*1000)/1000),Number(r.ground),
         [...r.gates].reduce((mask,n)=>mask|(1<<n),0),Number(r.left)])};
   }
-  function applySnapshot(s) {
+  function applySnapshot(s, exact=false) {
     if(!online || !['race','countdown'].includes(s?.mode) || ![s.elapsed,s.countdown,s.obstacleTime].every(Number.isFinite) ||
         !Array.isArray(s.racers) || s.racers.length!==racers.length ||
         !s.racers.every(row=>Array.isArray(row)&&row.length===netFields.length+3&&row.every(Number.isFinite)) ||
         !Array.isArray(s.pads) || s.pads.length!==springs.length || !s.pads.every(Number.isFinite)) return;
+    if(s.motion && (!Array.isArray(s.motion) || s.motion.length!==racers.length ||
+      !s.motion.every(row=>Array.isArray(row)&&row.length===4&&row.every(Number.isFinite)))) return;
     if(mode!==s.mode) setMode(s.mode);
     elapsed=s.elapsed; countdown=s.countdown; obstacleTime=s.obstacleTime;
     if (online.stalled) { online.stalled=false; $('toast').hidden=true; }
@@ -2533,11 +2629,12 @@ function run() {
     racers.forEach((r,i)=>{
       const row=s.racers[i];
       const target={x:row[0],y:row[1],z:row[2]};
-      if(!r.target || Math.hypot(r.x-target.x,r.z-target.z)>3) Object.assign(r,target);
+      if(exact || !r.target || Math.hypot(r.x-target.x,r.z-target.z)>3) Object.assign(r,target);
       r.target=target;
       for(let n=3;n<netFields.length;n++) r[netFields[n]]=row[n];
       r.cp=clamp(Math.trunc(r.cp),0,checkpoints.length-1);
-      r.ground=!!row[netFields.length]; r.left=!!row[netFields.length+2];
+      r.ground=!!row[netFields.length]; r.left=online.departed.has(r.i)||!!row[netFields.length+2];
+      if(s.motion) [r.coyote,r.springLock,r.nextJump,r.dove]=s.motion[i];
       r.gates=new Set(gates.map((_,n)=>n).filter(n=>row[netFields.length+1] & (1<<n)));
     });
     if (mode==='race') {
@@ -2555,13 +2652,14 @@ function run() {
     $('count').textContent=count>0?count:'VAI!';
     if (mode==='countdown' && lastCount!==count) {lastCount=count;tone(count>0?370:735,.13,'triangle');}
     updateHUD();
+    return true;
   }
   function clientStep(dt) {
     if(notice>0 && (notice-=dt)<=0) $('toast').hidden=true;
     online.age=(online.age||0)+dt;
     if (online.age>5 && !online.stalled) {
       online.stalled=true; notice=0;
-      $('toast').textContent='Aguardando o anfitrião retomar a corrida…'; $('toast').hidden=false;
+      $('toast').textContent='Sincronizando a corrida com os outros pilotos…'; $('toast').hidden=false;
     }
     if (online.age<.12 && mode==='race') {obstacleTime+=dt;updateObstacles(obstacleTime);}
     for(const r of racers) if(r.target) {
@@ -2575,9 +2673,25 @@ function run() {
   if (window.createTurboRoom) {
     room=window.createTurboRoom({
       pilot:()=>pilotIndex,
-      begin(session) {online=session; training=false;rankSignature='';lastNetSend=-100;startRace();},
+      begin(session) {online={...session,departed:new Set()}; training=false;rankSignature='';lastNetSend=-100;startRace();},
       apply:applySnapshot,
-      gone(seat) {const r=racers.find(r=>r.i===seat);if(r)r.left=true;},
+      checkpoint:()=>online?snapshot():null,
+      authority(isHost,state,seat) {
+        if(!online) return;
+        if(state) applySnapshot(state,true);
+        online.host=isHost; online.leaderSlot=seat;
+        notify(isHost?'Você assumiu a sala.':(racers.find(r=>r.i===seat)?.name||'Outro piloto')+' assumiu a sala.');
+        updateHUD();
+        lastNetSend=-100;
+        lastStamp=undefined;
+        accumulator=0;
+      },
+      gone(seat) {
+        if(!online) return;
+        online.departed.add(seat);
+        const r=racers.find(r=>r.i===seat);
+        if(r) r.left=true;
+      },
       reset() {
         online=null;
         if ($('race-exit').open) $('race-exit').close();
