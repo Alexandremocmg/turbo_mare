@@ -105,6 +105,32 @@ async function verify({send,evaluate,until,click,key,screenshot}) {
     notify(role+'-rematch');
     await wait(role==='--host'?'--guest-rematch':'--host-rematch');
   }
+  if(scenario==='--rapida') {
+    // Os três perfis procuram corrida ao mesmo tempo; o relay público forma uma única sala.
+    const others=['--host','--guest','--friend'].filter(r=>r!==role);
+    await go(entry);
+    await until("document.readyState==='complete' && document.getElementById('cover-art')?.naturalWidth>0");
+    await click('quick');
+    await until("document.getElementById('room')?.open===true && document.getElementById('room-title').textContent==='Partida rápida'");
+    await evaluate("document.getElementById('room-nick').value="+JSON.stringify(name));
+    await click('room-enter');
+    await until("['countdown','race'].includes(document.body.dataset.mode)",120000);
+    const grid=await evaluate("Array.from(document.querySelectorAll('#race-list li'),li=>li.textContent)");
+    console.log(role,'grid:',grid.join(' | '));
+    assert.equal(grid.length,7,'Três pilotos e quatro bots');
+    for(const pilot of ['Coral','Marujo','Lontra','Bot Coral','Bot Farol']) assert.ok(grid.some(row=>row.includes(pilot)),pilot);
+    notify(role+'-grid');
+    for(const other of others) await wait(other+'-grid');
+    await move();
+    await until(advanced('Bot Recife'),120000);
+    for(const pilot of ['Coral','Marujo','Lontra']) await until(advanced(pilot),120000);
+    notify(role+'-moved');
+    for(const other of others) await wait(other+'-moved');
+    await click('pause');await click('race-leave');
+    assert.equal(await evaluate('document.body.dataset.mode'),'menu');
+    console.log(role,'viu os outros dois pilotos e os bots avançarem na partida rápida.');
+    return;
+  }
   if(role==='--host') {
     await go(entry);
     await until("document.readyState==='complete' && document.getElementById('cover-art')?.naturalWidth>0");
@@ -192,12 +218,13 @@ async function run() {
       return code;
     } catch(error) { fs.writeFileSync(path.join(dir,'failed'),role);console.error(error.message);return 1; }
   }
-  const jobs=[launch('--host'),launch('--guest','invite')];
-  if(!process.argv.includes('--copa'))jobs.push(launch('--friend','first-guest'));
+  const quick=process.argv.includes('--rapida');
+  const jobs=[launch('--host'),launch('--guest',quick?null:'invite')];
+  if(!process.argv.includes('--copa'))jobs.push(launch('--friend',quick?null:'first-guest'));
   const codes=await Promise.all(jobs);
   for(const filename of fs.readdirSync(dir)) fs.unlinkSync(path.join(dir,filename));
   fs.rmdirSync(dir);
   assert.ok(codes.every(code=>code===0),JSON.stringify(codes));
-  console.log(jobs.length===2?'Dois perfis disputaram a Copa, conferiram a soma e largaram na revanche.':'Três perfis verificaram troca de anfitrião, aba congelada, saída e continuidade.');
+  console.log(quick?'Três perfis se encontraram na partida rápida e correram com quatro bots.':jobs.length===2?'Dois perfis disputaram a Copa, conferiram a soma e largaram na revanche.':'Três perfis verificaram troca de anfitrião, aba congelada, saída e continuidade.');
 }
 if(require.main===module)run().catch(err=>{console.error(err);process.exitCode=1;});
