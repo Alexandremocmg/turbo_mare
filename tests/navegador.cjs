@@ -112,7 +112,7 @@ async function main() {
     await evaluate("document.documentElement.dataset.beforeOfflineReload = 'true'");
     navigations.length = 0;
     await send('Page.reload', {ignoreCache:false});
-    await until("!document.documentElement.dataset.beforeOfflineReload && !navigator.onLine && document.getElementById('cover-art')?.naturalWidth > 0 && document.getElementById('bay-art')?.naturalWidth > 0");
+    await until("!document.documentElement?.dataset.beforeOfflineReload && !navigator.onLine && document.getElementById('cover-art')?.naturalWidth > 0 && document.getElementById('bay-art')?.naturalWidth > 0");
     assert.ok(navigations.some(res => res.fromServiceWorker && res.status === 200), 'Entrada offline pelo service worker');
     await click('practice');
     await until(racing);
