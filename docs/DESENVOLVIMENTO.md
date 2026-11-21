@@ -38,10 +38,13 @@ A simulação de `src/game.js` roda no navegador do anfitrião. Os convidados en
 
 Ao ocultar a aba, o anfitrião envia o estado da pista e transfere a simulação a um participante visível. Uma saída voluntária também envia o estado final. Se o navegador fechar abruptamente, os participantes usam o último estado recebido. Quando a conexão permanece aberta e a aba para de responder, um participante ativo pode assumir após alguns segundos. O relay ordena as solicitações e cada troca incrementa a geração da sala para descartar mensagens atrasadas. O sucessor preserva cronômetro, posições, velocidades, checkpoints, anéis e chegadas. A corrida precisa de pelo menos um piloto com o jogo ativo.
 
-O teste abaixo usa três perfis isolados do Chrome e um convite novo no relay real. Ele congela a aba de quem criou a sala, verifica o avanço dos convidados, testa a saída dos anfitriões e acompanha o último piloto. Para testar localmente, sirva a raiz por HTTP e substitua a URL por `http://localhost:8000/`.
+Convites da Copa incluem `&copa=1`. Cada cliente guarda os pontos das duas provas quando recebe a chegada oficial do anfitrião. O número da corrida avança também na revanche e permite ignorar mensagens de uma largada anterior. O intervalo usa o mesmo mecanismo de troca de anfitrião da corrida. Convites anteriores à Copa continuam no canal de prova única.
+
+O primeiro teste abaixo usa três perfis isolados do Chrome e um convite novo no relay real. Ele congela a aba de quem criou a sala, verifica o avanço dos convidados, testa a saída dos anfitriões e acompanha o último piloto. O segundo usa dois perfis para jogar as duas provas, comparar o placar e iniciar a revanche. Para testar localmente, sirva a raiz por HTTP e substitua a URL por `http://localhost:8000/`.
 
 ```sh
 node tests/salas.cjs https://alexandremocmg.github.io/turbo_mare/
+node tests/salas.cjs https://alexandremocmg.github.io/turbo_mare/ --copa
 ```
 
 ## Validação

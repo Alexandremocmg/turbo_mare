@@ -436,11 +436,11 @@ function run() {
     else gl.drawArrays(gl.TRIANGLES,0,mesh.count);
   }
 
-  const COURSE_END = 126;
+  let COURSE_END = 126;
   const TIME_LIMIT = 90;
   const QUALIFY = 6;
-  const checkpoints = [3.5,34.5,80];
-  const course = [
+  let checkpoints = [3.5,34.5,80];
+  let course = [
     {x:0,z:13,w:18,l:26,c:'deck'},
     {x:0,z:39,w:16,l:18,c:'deck2'},
     {x:-5.55,z:62.25,w:4.6,l:21.5,c:'purple'},
@@ -601,7 +601,7 @@ function run() {
     }
   }
   // Each spring launches toward a landing point. Holding left/right trims the arc.
-  const springs=[
+  let springs=[
     {x:-4.6,z:23,w:3,targetX:-4.6,forward:12.6,lift:8.2},
     {x:6.7,z:45,w:2.5,targetX:10.65,forward:14.1,lift:12.2},
     {x:10.65,z:69,w:2.55,targetX:5.6,forward:14,lift:9.9},
@@ -614,7 +614,7 @@ function run() {
     add(trackObjects,soft,p.x,.10,p.z,p.w+.12,.19,2.66,'navy');
     for(const s of [-1,1])add(trackObjects,soft,p.x+s*(p.w*.5-.11),.20,p.z,.18,.20,2.54,'orange');
   }
-  const gates=[{x:-4.6,y:2.25,z:29},{x:9,y:4.15,z:53},{x:8.4,y:2.95,z:75.5},{x:-6.57,y:2.65,z:100.5}];
+  let gates=[{x:-4.6,y:2.25,z:29},{x:9,y:4.15,z:53},{x:8.4,y:2.95,z:75.5},{x:-6.57,y:2.65,z:100.5}];
   const squidX=-11.8,squidZ=109;
   // An oversized luminous lifebuoy frames the finish line.
   add(trackObjects,hoop,0,4.3,127.9,18.6,15.8,9.7,'orange');
@@ -623,7 +623,7 @@ function run() {
     const a=.24+i*(Math.PI-.48)/8;
     add(trackObjects,ball,9.15*Math.cos(a),4.3+7.8*Math.sin(a),127.5,.47,.47,.47,'mint',0,0,2);
   }
-  const attacks=[{x:-4.8,z:103.8,offset:0},{x:1.6,z:111,offset:2.2}];
+  let attacks=[{x:-4.8,z:103.8,offset:0},{x:1.6,z:111,offset:2.2}];
   const cycle=t=>((t%4.4)+4.4)%4.4;
   function tentacleEnd(a,t){
     const phase=cycle(t+a.offset);
@@ -648,6 +648,7 @@ function run() {
         draw(ball,g.x+1.5*Math.cos(a),g.y+1.5*Math.sin(a),g.z,.24,.24,.24,'white',0,0,2);
       }
     }
+    if(shipyard) {drawShipyard(t);return;}
     drawKraken(t);
     for(const a of attacks){
       const phase=cycle(t+a.offset), height=tentacleEnd(a,t);
@@ -855,14 +856,14 @@ function run() {
     }
   }
 
-  const fixedScene=bakeStatic(trackObjects.concat(scenery));
-  const bumpers = [
+  let fixedScene=bakeStatic(trackObjects.concat(scenery));
+  let bumpers = [
     {z:13.5,width:2.6,s:5.5,p:0,w:1.4},
     {z:19.5,width:2.6,s:5.4,p:1.1,w:1.4},
     {z:107.1,width:2.92,s:6.3,p:.6,w:1.9},
     {z:115,width:2.92,s:6.4,p:2.1,w:2.1}
   ];
-  const spinners = [
+  let spinners = [
     {x:0,z:39,r:6.55,w:1.8,p:.8},
     {x:-5.55,z:65,r:1.95,w:3.45,p:0},
     {x:0,z:65,r:1.95,w:-3.45,p:1.2},
@@ -870,6 +871,111 @@ function run() {
     {x:0,z:86.5,r:5.65,w:-2.16,p:1.25},
     {x:0,z:121,r:7.3,w:2.52,p:.4}
   ];
+  const bay={course,checkpoints,springs,gates,attacks,spinners,bumpers,fixedScene,finish:COURSE_END};
+  const yard={
+    course:[[0,12,17,28],[0,32,15,12],[-6,46.5,3.2,17],[0,64,16.4,20],
+      [3.2,81.5,9.7,15],[0,104,17,24]].map(([x,z,w,l])=>({x,z,w,l})),
+    checkpoints:[3.5,31,67],springs:[],attacks:[],spinners:[],bumpers:[],finish:109,
+    gates:[{x:1.5,y:1.85,z:53},{x:3.3,y:2.3,z:90.5}]
+  };
+  let shipyard=false;
+  const bridgeZ=46, bridgeWidth=4.5, bridgeLength=10.8;
+  const bridgeX=t=>1.4+3.4*Math.sin(t*.77);
+  const cranes=[{z:20,phase:0},{z:66,phase:1.8},{z:101,phase:3.7}];
+  const loadX=(c,t)=>5.9*Math.sin(t*.93+c.phase);
+  const loadBottom=(c,t)=>.45+2.05*(.5+.5*Math.sin(t*1.31+c.phase));
+  function onBridge(x,z,t){
+    return shipyard && Math.abs(z-bridgeZ)<=bridgeLength/2+.12 && Math.abs(x-bridgeX(t))<=bridgeWidth/2+.12;
+  }
+  // The same corrugated shell is drawn at different scales on ships and crane slings.
+  let cargoShell;
+  function makeCargoShell(){
+    const parts=[[cube,0,0,0,.98,.96,.98,'suit']];
+    for(const side of [-1,1]){
+      for(let i=-5;i<=5;i++) parts.push([cube,side*.49,0,i*.082,.026,.88,.035,'suit']);
+      for(const y of [-.47,.47]) parts.push([cube,side*.49,y,0,.028,.045,1.01,'indigo']);
+      for(const x of [-.39,.39])parts.push([cube,x,0,side*.495,.025,.90,.022,'nickel']);
+      for(const x of [-.47,.47])for(const y of [-.46,.46])parts.push([cube,x,y,side*.5,.075,.08,.04,'brass']);
+    }
+    return assemble(parts);
+  }
+  function buildYard(){
+    const fixed=[];
+    for(const p of yard.course){
+      add(fixed,cube,p.x,-.34,p.z,p.w,.68,p.l,'shark');
+      for(const side of [-1,1]){
+        const x=p.x+side*(p.w/2-.18);
+        add(fixed,cube,x,.017,p.z,.32,.034,p.l,'flannel');
+        for(let z=p.z-p.l/2+.6;z<p.z+p.l/2;z+=1.65)
+          add(fixed,cube,x,.041,z,.32,.025,.61,'ink');
+      }
+      for(let z=p.z-p.l/2+2;z<p.z+p.l/2-.4;z+=3.8){
+        add(fixed,cube,p.x,.014,z,p.w-.8,.025,.05,'indigo');
+        if(p.w>5)add(fixed,cube,p.x,.027,z,.13,.03,1.55,'cream');
+      }
+    }
+    for(const z of [6.5,yard.finish]){
+      for(let i=0;i<20;i++)for(let j=0;j<2;j++)
+        add(fixed,cube,(i-9.5)*.82,.045,z+j*.64,.82,.028,.64,(i+j)%2?'ink':'white');
+    }
+    for(const z of yard.checkpoints.slice(1))add(fixed,cube,0,.04,z,14,.045,.19,'lime');
+    for(const z of [...cranes.map(c=>c.z),bridgeZ,yard.finish]){
+      const high=z===yard.finish?8.1:9.8;
+      for(const side of [-1,1]){
+        const x=side*8.9;
+        for(const dz of [-1.15,1.15]){
+          add(fixed,cube,x,-.48,z+dz,2.1,1.55,1.8,'navy');
+          add(fixed,cube,x,(high-1)/2,z+dz,.45,high+1,.44,'flannel');
+          for(let y=.8;y<high-1;y+=2.5){
+            beam(fixed,[x,y,z+dz],[x,y+2.45,z-dz],.15,'brass');
+          }
+        }
+        add(fixed,soft,x,high+.4,z,1.25,.38,3.1,'indigo');
+        add(fixed,ball,x,high+.73,z,.42,.52,.42,'orange',0,0,2);
+      }
+      for(const dz of [-.63,.63]){
+        for(const y of [high-.72,high+.12])add(fixed,cube,0,y,z+dz,18.4,.27,.24,'flannel');
+        for(let i=0;i<12;i++)beam(fixed,[-9+i*1.5,high-.69,z+dz],[-7.5+i*1.5,high+.11,z+dz],.11,'brass');
+      }
+      add(fixed,soft,-7.9,high-1.26,z,1.55,1.55,1.8,'orange');
+      add(fixed,cube,-7.88,high-1.12,z-.91,1.25,.72,.05,'lensBlue');
+    }
+    for(const [x,z] of [[-15,18],[18,46],[-17,77],[16,100]]){
+      add(fixed,hull,x,-2.8,z,8.1,3.3,25,'navy');
+      add(fixed,cube,x,-1.86,z,7.4,.6,19,'rust');
+      for(let j=0;j<3;j++)for(let k=0;k<2;k++){
+        const xx=x+(k-.5)*3, zz=z+(j-1)*5.7;
+        for(let layer=0;layer<1+(j+k)%2;layer++){
+          const y=-.32+layer*2.45, c=['rust','teal','orange','shark'][(j+k+layer)%4];
+          add(fixed,cube,xx,y,zz,2.84,2.45,5.55,c);
+          for(let rib=-2;rib<=2;rib++)add(fixed,cube,xx,y,zz+rib*1.03,2.94,2.25,.13,c);
+        }
+      }
+    }
+    cargoShell=makeCargoShell();
+    return bakeStatic(fixed);
+  }
+  function selectTrack(useYard){
+    if(shipyard===useYard)return;
+    shipyard=useYard;
+    if(shipyard && !yard.fixedScene)yard.fixedScene=buildYard();
+    const next=shipyard?yard:bay;
+    ({course,checkpoints,springs,gates,attacks,spinners,bumpers,fixedScene}=next);
+    COURSE_END=next.finish;
+    gl.uniform1f(u.deckReady,shipyard?0:1);
+  }
+  function drawShipyard(t){
+    function load(x,z,bottom,w,h,d,tint){
+      draw(cargoShell,x,bottom+h/2,z,w,h,d,tint);
+      draw(soft,x,9.12,z,2.15,.69,1.75,'navy');
+      for(const side of [-1,1])draw(soft,x+side*w*.46,bottom+h+.07,z,.14,.14,d*.95,'flannel');
+      const cableHeight=8.85-(bottom+h+.27);
+      for(const side of [-1,1])for(const end of [-1,1])
+        draw(drum,x+side*w*.42,8.85-cableHeight/2,z+end*d*.40,.07,cableHeight,.07,'ink');
+    }
+    load(bridgeX(t),bridgeZ,-2.25,bridgeWidth,2.25,bridgeLength,'teal');
+    for(const c of cranes)load(loadX(c,t),c.z,loadBottom(c,t),3.05,1.55,2.1,'rescue');
+  }
   function updateObstacles(t) {
     for(const b of bumpers) {
       b.x = Math.sin(t*b.w+b.p)*b.s;
@@ -878,6 +984,7 @@ function run() {
     for(const s of spinners) s.a=t*s.w+s.p;
   }
   function drawObstacles(t) {
+    if(shipyard)return;
     for(const b of bumpers)drawCrab(b,t,Math.abs(player.z-b.z)<36);
     for(const s of spinners){
       draw(s.pivot,s.x,0,s.z,1,1,1,'white');
@@ -910,6 +1017,10 @@ function run() {
   let training=false, beatIndex=-1, online=null, room=null, lastNetSend=0, rankSignature='';
   const netFields=['x','y','z','vx','vy','vz','a','stride','bank','landing','hit','stun','dive','flight','boost','wait','cp','result','raceTime','falls'];
   function freshRace() {
+    selectTrack(online?.track==='estaleiro');
+    $('progress-name').textContent=online?.track?(shipyard?'2/2 · Estaleiro à Deriva':'1/2 · Baía do Kraken'):'Circuito do Kraken';
+    $('cup-leg').hidden=!online?.track;
+    $('cup-leg').textContent=shipyard?'2/2':'1/2';
     seed = 9137;
     const grid = [[0,4.5],[-3.8,5.7],[3.8,5.7],[-1.85,5.3],[1.85,5.35],
       [-5.8,4],[-2.85,2.9],[2.85,2.9],[5.8,4],[0,2]];
@@ -1124,7 +1235,7 @@ function run() {
   }
 
   function floor(x,z) {
-    return course.some(p=>Math.abs(x-p.x)<=p.w/2+.13 && Math.abs(z-p.z)<=p.l/2+.13);
+    return course.some(p=>Math.abs(x-p.x)<=p.w/2+.13 && Math.abs(z-p.z)<=p.l/2+.13) || onBridge(x,z,obstacleTime);
   }
   function splash(r) {
     for(let i=0;i<12;i++) particles.push({x:r.x,y:-3.29,z:r.z,
@@ -1186,6 +1297,11 @@ function run() {
     if(r===player) tone(126,.21,'triangle',0,.49);
   }
   function collideObstacles(r) {
+    if(shipyard)for(const c of cranes){
+      const x=r.x-loadX(c,obstacleTime), z=r.z-c.z, bottom=loadBottom(c,obstacleTime);
+      if(Math.abs(x)<1.82 && Math.abs(z)<1.32 && r.y+1.58>bottom && r.y<bottom+1.55)
+        knock(r,Math.cos(obstacleTime*.93+c.phase),Math.sign(z)||-1);
+    }
     for(const a of attacks){
       if(tentacleEnd(a,obstacleTime)<1.24 && r.y<1.23 && Math.hypot(r.x-a.x,r.z-a.z)<1.36) knock(r,r.x-a.x,1.45);
     }
@@ -1284,6 +1400,7 @@ function run() {
     }
     if(speed<=.28)r.bank=(r.bank||0)*Math.exp(-9*dt);
     r.stride+=dt*speed*1.95;
+    if(r.ground && onBridge(r.x,r.z,obstacleTime-dt))r.x+=bridgeX(obstacleTime)-bridgeX(obstacleTime-dt);
     r.x+=r.vx*dt;
     r.z+=r.vz*dt;
     const prevY=r.y;
@@ -1322,7 +1439,7 @@ function run() {
           tone(698,.17,'triangle',.09);
         }
       }
-      if (r.z>=COURSE_END && r.z<=128 && Math.abs(r.x)<8.65) {
+      if (r.z>=COURSE_END && r.z<=COURSE_END+2 && Math.abs(r.x)<8.65) {
         finishers.push(r);
         r.result=finishers.length;
         r.raceTime=elapsed;
@@ -1363,8 +1480,9 @@ function run() {
     const percent = Math.floor(clamp((progressOf(player)-4.5)/(COURSE_END-4.5),0,1)*100);
     $('place').textContent=training?'Treino':rank+'º';
     $('field-size').textContent=training?'':'/ '+racers.length;
-    $('sector').textContent=player.z<35?'Píer de largada':player.z<77?(player.x>8?'Atalho do recife':'Passagem do recife'):player.z<100?'Canal da mola':'Baía do Kraken';
-    $('ring-score').textContent='◎ '+player.gates.size+'/4';
+    $('sector').textContent=shipyard?(player.z<30?'Estaleiro · Pórtico de carga':player.z<54?'Estaleiro · Doca seca':player.z<90?'Estaleiro · Cais de montagem':'Estaleiro · Doca de chegada'):
+      player.z<35?'Píer de largada':player.z<77?(player.x>8?'Atalho do recife':'Passagem do recife'):player.z<100?'Canal da mola':'Baía do Kraken';
+    $('ring-score').textContent='◎ '+player.gates.size+'/'+gates.length;
     document.body.dataset.turbo=(player.boost>0||player.flight>0)?'on':'off';
     $('percent').textContent=percent+'%';
     $('fill').style.width=percent+'%';
@@ -1437,12 +1555,14 @@ function run() {
     updateObstacles(obstacleTime);
     for(const r of racers) moveRacer(r,dt);
     separateRacers();
-    if(!gapHint && !player.flight && player.z>20 && player.z<25.8) {
+    if(shipyard && !gapHint && player.z>29 && player.z<38){
+      gapHint=true;notify('Cais à esquerda ou salto pelo contêiner!');
+    } else if(!shipyard && !gapHint && !player.flight && player.z>20 && player.z<25.8) {
       gapHint=true;
       notify(matchMedia('(pointer:coarse)').matches?'Pule para atravessar o vão':'Espaço para atravessar o vão');
     }
     if (online && (racers.every(r=>r.result||r.left) || elapsed>=TIME_LIMIT)) {
-      room.finish(roomOrder().map(r=>({name:r.name,slot:r.i,score:roomScore(r)})));
+      room.finish(roomOrder().map(r=>({name:r.name,slot:r.i,score:roomScore(r),eligible:!!r.result||(!r.left&&r.cp>0)})));
       return;
     }
     if(!online && (player.result||finishers.length>=QUALIFY||(!training && elapsed>=TIME_LIMIT))) {

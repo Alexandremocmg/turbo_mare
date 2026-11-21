@@ -72,3 +72,29 @@ assert.equal(game.mode,'race');
 cross(Object.assign(promoted,{flight:0,vy:0,vz:0}));
 assert.equal(results[0].name,'Marujo');
 console.log('Corrida de amigos: controles remotos, classificação, tempo limite e desconexão verificados.');
+
+callbacks.begin({host:true,slot:0,leaderSlot:0,members,track:'estaleiro'});
+step(390);
+// Drive the fixed quay and jump from the last barge with the regular controls.
+game.keys.add('KeyW');
+for(let i=0;i<75*120 && !game.racer.result;i++){
+  const r=game.racer, target=r.z<25?0:r.z<54?-6:r.z<72?0:2.8;
+  game.keys.delete('KeyA');game.keys.delete('KeyD');
+  if(Math.abs(r.x-target)>.28)game.keys.add(r.x<target?'KeyD':'KeyA');
+  if(r.ground && r.z>87 && r.z<89.1)game.jump();
+  step(1);
+}
+assert.equal(game.racer.result,1,'O cais leva da largada à chegada do Estaleiro.');
+assert.equal(game.racer.cp,2);
+assert.ok(game.racer.z<112,'A segunda prova tem uma chegada própria.');
+game.keys.clear();
+const shipState=callbacks.checkpoint();
+callbacks.begin({host:false,slot:2,leaderSlot:0,members,track:'estaleiro'});
+assert.equal(callbacks.apply(shipState),true);
+callbacks.authority(true,shipState,2);
+const bridgeTime=shipState.obstacleTime;
+Object.assign(game.racer,{x:1.4+3.4*Math.sin(bridgeTime*.77),z:46,y:0,ground:true,wait:0,vx:0,vy:0,vz:0});
+const startX=game.racer.x;step(120);
+assert.ok(game.racer.ground && game.racer.y===0,'O teto do contêiner é uma plataforma física.');
+assert.ok(Math.abs(game.racer.x-startX)>.05,'O contêiner transporta o piloto.');
+console.log('Estaleiro: os dois checkpoints, chegada, contêiner móvel e troca de anfitrião verificados.');

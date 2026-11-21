@@ -70,8 +70,8 @@ async function main() {
     if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails));
     return r.result.value;
   }
-  async function until(expression) {
-    const deadline = Date.now() + 90000;
+  async function until(expression, timeout=90000) {
+    const deadline = Date.now() + timeout;
     do {
       if (await evaluate(expression)) return;
       await sleep(160);
@@ -92,6 +92,7 @@ async function main() {
   await send('Page.enable');
   if (['--host','--guest','--friend'].includes(process.argv[2])) {
     await require('./salas.cjs').verify({send,evaluate,until,click,key,screenshot});
+    assert.deepEqual(errors,[]);
     return;
   }
   if (process.argv[2] === '--pwa') {

@@ -16,7 +16,7 @@ async function signal(dir, name) {
 }
 
 async function verify({send,evaluate,until,click,key,screenshot}) {
-  const [role,entry,dir]=process.argv.slice(2);
+  const [role,entry,dir,scenario]=process.argv.slice(2);
   const name={'--host':'Coral','--guest':'Marujo','--friend':'Lontra'}[role];
   const notify=(file,value='ok')=>{console.log(role,file);const dest=path.join(dir,file);fs.writeFileSync(dest+'.tmp',value);fs.renameSync(dest+'.tmp',dest);};
   const wait=file=>signal(dir,file);
@@ -25,7 +25,10 @@ async function verify({send,evaluate,until,click,key,screenshot}) {
   // The separate browser smoke test covers WebGL rendering with the full draw calls.
   await send('Page.addScriptToEvaluateOnNewDocument',{source:`
     try { localStorage.setItem('mare-render-quality','light'); } catch {}
-    for (const method of ['drawArrays','drawElements','clear']) WebGLRenderingContext.prototype[method]=()=>{};
+    for (const method of ['drawArrays','drawElements','clear']) {
+      const original=WebGLRenderingContext.prototype[method];
+      WebGLRenderingContext.prototype[method]=function(...args){if(window.captureGL)return original.apply(this,args);};
+    }
     const nativeFrame=window.requestAnimationFrame.bind(window);
     window.requestAnimationFrame=fn=>setTimeout(()=>nativeFrame(fn),170);
   `});
@@ -56,6 +59,61 @@ async function verify({send,evaluate,until,click,key,screenshot}) {
     await evaluate("document.getElementById('room-nick').value="+JSON.stringify(name));
     await click('room-enter');
   }
+  const inCup=scenario==='--copa';
+  async function drive(heat){
+    await until("document.body.dataset.mode==='race' && document.getElementById('progress-name').textContent.startsWith('"+heat+"/2')");
+    await key('keyDown','KeyW','w',87);
+    if(heat===1){
+      await evaluate(`window.cupDriver=setInterval(()=>{
+        const p=parseInt(document.getElementById('percent').textContent);
+        if([15,16,17,33,34,54,55,73,74].includes(p)){
+          for(const type of ['keydown','keyup'])window.dispatchEvent(new KeyboardEvent(type,{code:'Space',key:' ',bubbles:true}));
+        }
+      },70)`);
+    } else if(role==='--guest'){
+      await evaluate('window.captureGL=true');
+      await sleep(1150);
+      await screenshot('estaleiro');
+      assert.equal(await evaluate("document.querySelector('canvas').getContext('webgl').getError()"),0);
+      await evaluate('window.captureGL=false');
+    }
+    const title=heat===1?'Placar após a Baía':'Pódio da Copa';
+    await until("document.getElementById('room').open && document.getElementById('room-title').textContent==="+JSON.stringify(title),230000);
+    await key('keyUp','KeyW','w',87);
+    await evaluate('clearInterval(window.cupDriver)');
+  }
+  async function runCup(invite){
+    await drive(1);
+    const readTable=()=>evaluate("Array.from(document.querySelectorAll('#cup-rows tr'),r=>Array.from(r.cells,c=>c.textContent))");
+    const halfway=await readTable();
+    assert.equal(halfway.length,2);
+    assert.ok(halfway.some(r=>Number(r[1])>0),'Pontuação da Baía');
+    notify(role+'-half');
+    let resume;
+    if(role==='--host'){
+      await wait('--guest-half');
+      resume=await minimize();
+      await wait('guest-leading');
+      await resume();
+    }else{
+      await until("document.body.dataset.mode==='race' && document.getElementById('progress-name').textContent.startsWith('2/2') && ("+leader('Marujo')+")");
+      notify('guest-leading');
+    }
+    await drive(2);
+    const podium=await readTable();
+    assert.equal(podium.length,2);
+    assert.ok(podium.some(r=>Number(r[2])>0),'Pontuação do Estaleiro');
+    for(const row of podium){
+      assert.equal(Number(row[3]),Number(row[1])+Number(row[2]));
+      assert.ok(halfway.some(r=>r[0].slice(3)===row[0].slice(3) && r[1]===row[1]));
+    }
+    assert.equal(await evaluate("document.getElementById('room-url').value"),invite);
+    notify(role+'-podium',JSON.stringify(podium));
+    if(role==='--guest'){await wait('--host-podium');await click('room-start');}
+    await until("document.body.dataset.mode==='race' && document.getElementById('progress-name').textContent.startsWith('1/2')");
+    notify(role+'-rematch');
+    await wait(role==='--host'?'--guest-rematch':'--host-rematch');
+  }
   if(role==='--host') {
     await go(entry);
     await until("document.readyState==='complete' && document.getElementById('cover-art')?.naturalWidth>0");
@@ -67,8 +125,9 @@ async function verify({send,evaluate,until,click,key,screenshot}) {
     const invite=await evaluate("document.getElementById('room-url').value");
     assert.ok(invite.startsWith(entry.split('#')[0]+'#sala='));
     notify('invite',invite);
-    await until("document.querySelectorAll('#room-list li').length===3");
+    await until("document.querySelectorAll('#room-list li').length==="+(inCup?2:3));
     await click('room-start');
+    if(inCup){await runCup(invite);return;}
     await until("document.body.dataset.mode==='race'");
     console.log('Largada:',await evaluate("document.getElementById('race-list').textContent"));
     await until(leader('Coral'));
@@ -87,9 +146,10 @@ async function verify({send,evaluate,until,click,key,screenshot}) {
     notify('invite-still-works');
     console.log('O convite original ainda encontra a sala depois da saída do criador.');
   } else if(role==='--guest') {
-    await join(await wait('invite'));
+    const invite=await wait('invite');await join(invite);
     await until("document.getElementById('room-title').textContent==='Sala de amigos'");
     notify('first-guest');
+    if(inCup){await runCup(invite);return;}
     await wait('creator-frozen');
     await until(leader('Marujo'));
     await move();
@@ -135,16 +195,18 @@ async function run() {
   async function launch(role,ready) {
     try {
       if(ready) await signal(dir,ready);
-      const child=spawn(process.execPath,[path.join(__dirname,'navegador.cjs'),role,entry,dir],{stdio:'inherit',windowsHide:true});
+      const child=spawn(process.execPath,[path.join(__dirname,'navegador.cjs'),role,entry,dir,...process.argv.slice(3)],{stdio:'inherit',windowsHide:true});
       const code=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',resolve);});
       if(code!==0) fs.writeFileSync(path.join(dir,'failed'),role);
       return code;
     } catch(error) { fs.writeFileSync(path.join(dir,'failed'),role);console.error(error.message);return 1; }
   }
-  const codes=await Promise.all([launch('--host'),launch('--guest','invite'),launch('--friend','first-guest')]);
+  const jobs=[launch('--host'),launch('--guest','invite')];
+  if(!process.argv.includes('--copa'))jobs.push(launch('--friend','first-guest'));
+  const codes=await Promise.all(jobs);
   for(const filename of fs.readdirSync(dir)) fs.unlinkSync(path.join(dir,filename));
   fs.rmdirSync(dir);
-  assert.deepEqual(codes,[0,0,0]);
-  console.log('Três perfis verificaram troca de anfitrião, aba congelada, saída e continuidade.');
+  assert.ok(codes.every(code=>code===0),JSON.stringify(codes));
+  console.log(jobs.length===2?'Dois perfis disputaram a Copa, conferiram a soma e largaram na revanche.':'Três perfis verificaram troca de anfitrião, aba congelada, saída e continuidade.');
 }
 if(require.main===module)run().catch(err=>{console.error(err);process.exitCode=1;});

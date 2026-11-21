@@ -7,7 +7,9 @@ window.createTurboRoom = function createTurboRoom(game) {
   // New rooms have a stable channel independent of the connection running the physics.
   const leaseMs = 5000;
   const uidPattern = /^[A-Za-z0-9_-]{4,32}$/;
-  const active = () => ['lobby','race','results'].includes(stage);
+  const active = () => ['lobby','race','interval','results'].includes(stage);
+  const prizes=[10,8,6,4,2,1], intervalMs=10000;
+  let cup=false, leg=0, board=[], nextStart=0;
   const controls = new Map();
   let members = [], socket = null, hostId = '', host = false, slot = -1;
   let stage = 'closed', roomKey = '', round = 0, timer = 0, standings = [];
@@ -17,7 +19,7 @@ window.createTurboRoom = function createTurboRoom(game) {
   const validPilot = value => Number.isInteger(value) && value >= 0 && value < 4 ? value : 0;
   const invited = () => new URLSearchParams(location.hash.slice(1)).get('sala');
   const validKey = key => typeof key === 'string' && /^[a-f0-9]{32}(?:\.[A-Za-z0-9_-]{4,32})?$/.test(key);
-  const invite = () => { const url = new URL(location.href); url.hash = 'sala=' + roomKey + (legacy ? '.'+hostId : ''); return url.href; };
+  const invite = () => { const url = new URL(location.href); url.hash = 'sala=' + roomKey + (legacy ? '.'+hostId : '') + (cup?'&copa=1':''); return url.href; };
   function modal() { if (!dialog.open) dialog.showModal(); }
   function note(text) { el('room-status').textContent = text; }
   function send(message, target) {
@@ -30,6 +32,33 @@ window.createTurboRoom = function createTurboRoom(game) {
   function publish(message) { send({...message,term}); }
   function sync() { publish({t:'lobby',members}); }
   const member = uid => members.find(m=>m.uid===uid);
+  const total=r=>(r.scores[0]||0)+(r.scores[1]||0);
+  function rankBoard(){
+    return board.slice().sort((a,b)=>total(b)-total(a)||(b.scores[1]||0)-(a.scores[1]||0)||a.slot-b.slot);
+  }
+  function paintBoard(){
+    const visible=cup && ['interval','results'].includes(stage);
+    el('cup-board').hidden=!visible;
+    el('room-list').hidden=visible;
+    if(!visible)return;
+    let place=0, previous;
+    el('cup-rows').replaceChildren(...rankBoard().map((r,i)=>{
+      if(!previous || total(r)!==total(previous) || r.scores[1]!==previous.scores[1])place=i+1;
+      previous=r;
+      const row=document.createElement('tr');
+      const label=place+'º '+r.name+(r.uid===selfId?' (você)':'');
+      for(const [j,text] of [label,r.scores[0]??'—',r.scores[1]??'—',total(r)].entries()){
+        const cell=document.createElement(j===0?'th':'td');
+        if(j===0)cell.scope='row';
+        cell.textContent=String(text);row.append(cell);
+      }
+      return row;
+    }));
+  }
+  function updateInterval(){
+    const seconds=Math.max(0,Math.ceil((nextStart-performance.now())/1000));
+    note('Próxima prova: Estaleiro à Deriva. Largada em '+seconds+' s.');
+  }
   function paintList() {
     const rows = stage === 'results' ? standings : members;
     el('room-list').replaceChildren(...rows.map(m => {
@@ -46,14 +75,24 @@ window.createTurboRoom = function createTurboRoom(game) {
     el('room-invite').hidden = !(lobby || done);
     el('room-start').hidden = !host || !(lobby || done);
     el('room-start').disabled = members.length < 2;
-    el('room-start').textContent = done ? 'Nova corrida' : 'Largar';
-    el('room-title').textContent = done ? 'Resultado da sala' : lobby ? 'Sala de amigos' : 'Jogar com amigos';
+    el('room-start').textContent = done ? (cup?'Revanche':'Nova corrida') : (cup?'Largar na Baía':'Largar');
+    el('room-series').textContent=cup?'Copa das Marés':'Circuito do Kraken';
+    el('cup-rules').hidden=!cup || !(lobby || done || stage==='interval');
+    el('room-title').textContent = stage==='interval'?'Placar após a Baía':done ? (cup?'Pódio da Copa':'Resultado da sala') : lobby ? 'Sala de amigos' : 'Jogar com amigos';
     el('room-leave').textContent = setup ? 'Voltar' : 'Sair da sala';
     el('room-enter').textContent = roomKey && !host ? 'Entrar na sala' : 'Criar sala';
     if (lobby || done) el('room-url').value = invite();
-    if (lobby) note(host ? members.length < 2 ? 'Envie o convite a um amigo para liberar a largada.' : 'Todos a bordo. Você já pode dar a largada.' : 'Você está na sala. Aguarde a largada do anfitrião.');
-    if (done) note(host ? 'Convide outros pilotos ou dispute uma nova corrida.' : 'Aguarde o anfitrião iniciar uma nova corrida.');
-    paintList();
+    if (lobby) note((cup?'Baía do Kraken e Estaleiro à Deriva. ':'')+(host ? members.length < 2 ? 'Envie o convite a um amigo para liberar a largada.' : 'Todos a bordo. Você já pode dar a largada.' : 'Você está na sala. Aguarde a largada do anfitrião.'));
+    if (stage==='interval')updateInterval();
+    if (done) {
+      if(cup){
+        const first=rankBoard()[0];
+        const winners=first?board.filter(r=>total(r)===total(first)&&r.scores[1]===first.scores[1]):[];
+        const win=first && total(first)>0?(winners.length===1?first.name+' venceu a Copa':winners.map(r=>r.name).join(' e ')+' dividiram a vitória')+' com '+total(first)+' pontos. ':'Nenhum piloto marcou pontos. ';
+        note(win+(host?'Dispute a revanche com o mesmo convite.':'Aguarde a revanche nesta sala.'));
+      } else note(host ? 'Convide outros pilotos ou dispute uma nova corrida.' : 'Aguarde o anfitrião iniciar uma nova corrida.');
+    }
+    paintList();paintBoard();
   }
   function disconnect() {
     const old = socket;
@@ -79,8 +118,10 @@ window.createTurboRoom = function createTurboRoom(game) {
     if (stage !== 'closed') return;
     [roomKey,hostId=''] = validKey(key) ? key.split('.') : ['', ''];
     legacy=!!hostId; host = !roomKey; stage = 'setup';
+    cup=host || (!legacy && new URLSearchParams(location.hash.slice(1)).get('copa')==='1');
+    leg=0;board=[];
     modal(); paint();
-    note(roomKey ? 'Você recebeu um convite. Escolha seu apelido para entrar.' : 'Crie uma sala para até seis pessoas e compartilhe o link.');
+    note((cup?'Dispute a Baía do Kraken e o Estaleiro à Deriva. ':'')+(roomKey ? 'Escolha seu apelido para entrar.' : 'Crie uma sala para até seis pessoas e compartilhe o link.'));
     if (key && !roomKey) note('Convite inválido. Peça um novo link ou crie sua própria sala.');
     el('room-nick').focus();
   }
@@ -123,6 +164,10 @@ window.createTurboRoom = function createTurboRoom(game) {
   function monitorRoom() {
     if(stage==='connecting' && !host && selfId && performance.now()-lastHello>1500) {hello();return;}
     if(legacy || !active()) return;
+    if(stage==='interval'){
+      updateInterval();
+      if(host && performance.now()>=nextStart)startRound(1);
+    }
     if(host) {
       if(stage!=='race') publish({t:'pulse'});
       return;
@@ -137,8 +182,8 @@ window.createTurboRoom = function createTurboRoom(game) {
   function hostMessage(uid, m) {
     if (!m || typeof m !== 'object') return;
     if (m.t === 'hello') {
-      if (!['lobby','race','results'].includes(stage)) return;
-      if (stage==='race' || pendingStart) {send({t:'reject',reason:'A corrida já começou. Tente de novo após a chegada.'},uid);return;}
+      if (stage==='race' || stage==='interval' || pendingStart) {send({t:'reject',reason:'A corrida já começou. Tente de novo após a chegada.'},uid);return;}
+      if (!['lobby','results'].includes(stage)) return;
       let guest=member(uid);
       if (!guest) {
         if(members.length>=limit) {send({t:'reject',reason:'A sala está cheia.'},uid);return;}
@@ -147,7 +192,7 @@ window.createTurboRoom = function createTurboRoom(game) {
         members.push(guest);
       }
       sync();
-      send({t:'welcome',slot:guest.slot,members,term,round},uid);
+      send({t:'welcome',slot:guest.slot,members,term,round,...(cup && stage==='results'?{board}: {})},uid);
       paint();return;
     }
     const guest=member(uid);
@@ -165,13 +210,28 @@ window.createTurboRoom = function createTurboRoom(game) {
       new Set(list.map(m => m.slot)).size === list.length &&
       (legacy || (list.every(m=>typeof m.uid==='string' && uidPattern.test(m.uid)) && new Set(list.map(m=>m.uid)).size===list.length));
   }
-  function begin() {
+  function startRound(index) {
+    if(pendingStart)return;
+    pendingStart=true;publish({t:'go',round:round+1,members,leg:index});
+  }
+  function begin(index) {
+    leg=index;
+    if(cup && leg===0)board=members.map(({uid,slot,name})=>({uid,slot,name,scores:[null,null]}));
     controls.clear(); latest=null; pendingStart=pendingEnd=false; stage = 'race'; standings = [];
     if (dialog.open) dialog.close();
-    game.begin({host,slot,leaderSlot:legacy?0:member(hostId).slot,members:members.map(m=>({...m}))});
+    game.begin({host,slot,leaderSlot:legacy?0:member(hostId).slot,members:members.map(m=>({...m})),
+      track:cup?(leg===0?'baia':'estaleiro'):null});
   }
   function result(rows) {
     stage = 'results'; standings = rows; latest=null; pendingStart=pendingEnd=false;
+    if(cup){
+      const ranked=rows.filter(row=>row.eligible===true);
+      for(const r of board){
+        const i=ranked.findIndex(row=>row.slot===r.slot);
+        r.scores[leg]=i>=0?prizes[i]:0;
+      }
+      if(leg===0){stage='interval';nextStart=performance.now()+intervalMs;}
+    }
     game.reset(); modal(); paint();
   }
   function receive(uid,m,stamp) {
@@ -182,7 +242,14 @@ window.createTurboRoom = function createTurboRoom(game) {
       if(m.t!=='welcome' || !validMembers(m.members) || !m.members.some(p=>p.slot===m.slot && (legacy || p.uid===selfId))) return;
       if(!legacy && (!m.members.some(p=>p.uid===uid) || !Number.isSafeInteger(m.term))) return;
       clearTimeout(timer); hostId=uid;slot=m.slot;members=m.members;term=m.term||0;round=m.round||0;
-      stage='lobby';heard(stamp);paint();return;
+      stage='lobby';
+      if(cup && Array.isArray(m.board) && m.board.length<=limit && m.board.length &&
+        m.board.every(r=>r && typeof r.name==='string' && uidPattern.test(r.uid) &&
+          Number.isInteger(r.slot) && Array.isArray(r.scores) && r.scores.length===2 &&
+          r.scores.every(v=>v===0||prizes.includes(v)))){
+        board=m.board;stage='results';leg=1;
+      }
+      heard(stamp);paint();return;
     }
     if (!active()) return;
     if (!legacy) {
@@ -216,8 +283,10 @@ window.createTurboRoom = function createTurboRoom(game) {
       // The host already applied join/leave locally. Older echoes must not undo a newer admission.
       if(!host) members=m.members;
       paint();
-    } else if(m.t==='go' && ['lobby','results'].includes(stage) && validMembers(m.members) && m.members.some(p=>p.slot===slot) && Number.isInteger(m.round)) {
-      members=m.members;round=m.round;begin();
+    } else if(m.t==='go' && ['lobby','interval','results'].includes(stage) && validMembers(m.members) && m.members.some(p=>p.slot===slot) && Number.isInteger(m.round) &&
+      (!cup || (m.round===round+1 && m.leg===(stage==='interval'?1:0)))) {
+      members=cup?m.members.filter(m=>member(m.uid)):m.members;
+      round=m.round;begin(cup?m.leg:0);
     } else if(m.t==='state' && stage==='race' && m.round===round && !host) {
       remember(m.v);
     } else if(m.t==='end' && stage==='race' && m.round===round && Array.isArray(m.rows) && m.rows.length<=limit && m.rows.every(r=>r && typeof r.name==='string' && typeof r.score==='string')) {
@@ -236,7 +305,7 @@ window.createTurboRoom = function createTurboRoom(game) {
     selfId=''; term=0; round=0; pendingStart=pendingEnd=false;
     slot = host ? 0 : -1; stage = 'connecting'; paint(); note('Conectando à sala…');
     let current;
-    try { current = new WebSocket('wss://itty.ws/c/turbo-mare-'+(legacy?'v1-':'v2-')+roomKey+'?announce=true&list=true'+(legacy?'':'&echo=true')); }
+    try { current = new WebSocket('wss://itty.ws/c/turbo-mare-'+(cup?'copa-1-':legacy?'v1-':'v2-')+roomKey+'?announce=true&list=true'+(legacy?'':'&echo=true')); }
     catch { fail('Não foi possível abrir a conexão. Tente novamente.'); return; }
     socket = current;
     monitor=setInterval(monitorRoom,1100);
@@ -277,8 +346,7 @@ window.createTurboRoom = function createTurboRoom(game) {
   });
   el('room-start').addEventListener('click',()=>{
     if (!host || !['lobby','results'].includes(stage) || members.length < 2) return;
-    if(pendingStart) return;
-    pendingStart=true; publish({t:'go',round:round+1,members});
+    startRound(0);
   });
   document.addEventListener('visibilitychange',presence);
   window.addEventListener('pagehide',e=>{if(!e.persisted && active()) announceExit();});

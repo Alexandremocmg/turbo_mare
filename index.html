@@ -36,6 +36,16 @@ button:focus-visible{outline:3px solid #fff;outline-offset:4px}
 #room-list,#race-list{list-style:none;margin:10px 0 16px;padding:0}
 #room-list:empty{display:none}#room-list li{display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid #91d9c936;padding:6px 0}
 #room-list li span{font-size:12px;color:#abe4d6}
+#cup-board{width:100%;margin:12px 0 18px;border-collapse:collapse;font-variant-numeric:tabular-nums}
+#cup-board th,#cup-board td{text-align:right;padding:8px 4px;border-bottom:1px solid #91d9c936}
+#cup-board thead th{font-size:12px;color:#b9dbd5}
+#cup-board tr>:first-child{text-align:left;overflow-wrap:anywhere}
+#cup-board tbody tr:first-child{color:#ffe6a0}
+#cup-board tbody td:last-child{font-weight:800}
+#cup-rules{margin:12px 0 16px;color:#beded5;font-size:13px}
+#cup-rules summary{cursor:pointer}
+#cup-leg{color:#ffe6a0;margin-right:.45em}
+@media(min-width:621px){#cup-leg{display:none}}
 #room-ranks{position:absolute;top:76px;right:12px;max-width:min(250px,65vw);background:#102e40ed;border:1px solid #94cbb982;border-radius:6px;padding:6px 9px;font-size:12px;color:#fff2d8;pointer-events:auto}
 #room-ranks summary{cursor:pointer;font-weight:750}#race-list{margin:6px 0 0}#race-list li{padding:2px 0}
 @media(max-width:620px){.menu-buttons #friends{padding:9px}#room-ranks{top:65px}}
@@ -180,7 +190,7 @@ body[data-turbo="on"] #hud::before{opacity:1}
 </main>
 <dialog id="room" aria-labelledby="room-title">
   <form id="room-form">
-    <div class="eyebrow">Circuito do Kraken</div>
+    <div class="eyebrow" id="room-series">Copa das Marés</div>
     <h2 id="room-title">Jogar com amigos</h2>
     <p id="room-status" role="status"></p>
     <label id="room-nick-label" for="room-nick">Seu apelido<input id="room-nick" maxlength="18" placeholder="Piloto" autocomplete="nickname"></label>
@@ -188,6 +198,8 @@ body[data-turbo="on"] #hud::before{opacity:1}
   </form>
   <div id="room-invite" hidden><label for="room-url">Link do convite</label><div class="invite-row"><input id="room-url" readonly><button id="room-copy" type="button">Copiar link</button></div></div>
   <ol id="room-list"></ol>
+  <table id="cup-board" hidden aria-label="Pontuação da Copa das Marés"><thead><tr><th scope="col">Piloto</th><th scope="col">Baía</th><th scope="col">Estaleiro</th><th scope="col">Total</th></tr></thead><tbody id="cup-rows"></tbody></table>
+  <details id="cup-rules" hidden><summary>Como pontuar</summary><p>Do 1º ao 6º lugar, as provas valem 10, 8, 6, 4, 2 e 1 ponto. Quem chega primeiro fica à frente. Ao acabar o tempo, quem alcançou um checkpoint também pontua pela distância percorrida. Em caso de empate na soma, vale a pontuação do Estaleiro.</p></details>
   <div class="room-actions"><button id="room-start" class="primary" hidden>Largar</button><button id="room-leave">Voltar</button></div>
 </dialog>
 <dialog id="race-exit" aria-labelledby="exit-title"><h2 id="exit-title">Sair da corrida?</h2><p id="exit-info"></p><div class="room-actions"><button id="race-stay" class="primary">Continuar</button><button id="race-leave">Sair da sala</button></div></dialog>
@@ -209,7 +221,7 @@ body[data-turbo="on"] #hud::before{opacity:1}
       <button class="icon" id="pause" aria-label="Pausar" title="Pausar (Esc)">Ⅱ</button>
     </div>
   </div>
-  <div id="stage"><span id="sector">Píer de largada</span> <b id="ring-score">◎ 0/4</b></div>
+  <div id="stage"><span id="cup-leg" hidden></span><span id="sector">Píer de largada</span> <b id="ring-score">◎ 0/4</b></div>
   <details id="room-ranks" hidden><summary>Classificação</summary><ol id="race-list"></ol></details>
   <div id="count" hidden></div><div id="toast" role="status" hidden></div>
 </div>
@@ -291,7 +303,9 @@ window.createTurboRoom = function createTurboRoom(game) {
   // New rooms have a stable channel independent of the connection running the physics.
   const leaseMs = 5000;
   const uidPattern = /^[A-Za-z0-9_-]{4,32}$/;
-  const active = () => ['lobby','race','results'].includes(stage);
+  const active = () => ['lobby','race','interval','results'].includes(stage);
+  const prizes=[10,8,6,4,2,1], intervalMs=10000;
+  let cup=false, leg=0, board=[], nextStart=0;
   const controls = new Map();
   let members = [], socket = null, hostId = '', host = false, slot = -1;
   let stage = 'closed', roomKey = '', round = 0, timer = 0, standings = [];
@@ -301,7 +315,7 @@ window.createTurboRoom = function createTurboRoom(game) {
   const validPilot = value => Number.isInteger(value) && value >= 0 && value < 4 ? value : 0;
   const invited = () => new URLSearchParams(location.hash.slice(1)).get('sala');
   const validKey = key => typeof key === 'string' && /^[a-f0-9]{32}(?:\.[A-Za-z0-9_-]{4,32})?$/.test(key);
-  const invite = () => { const url = new URL(location.href); url.hash = 'sala=' + roomKey + (legacy ? '.'+hostId : ''); return url.href; };
+  const invite = () => { const url = new URL(location.href); url.hash = 'sala=' + roomKey + (legacy ? '.'+hostId : '') + (cup?'&copa=1':''); return url.href; };
   function modal() { if (!dialog.open) dialog.showModal(); }
   function note(text) { el('room-status').textContent = text; }
   function send(message, target) {
@@ -314,6 +328,33 @@ window.createTurboRoom = function createTurboRoom(game) {
   function publish(message) { send({...message,term}); }
   function sync() { publish({t:'lobby',members}); }
   const member = uid => members.find(m=>m.uid===uid);
+  const total=r=>(r.scores[0]||0)+(r.scores[1]||0);
+  function rankBoard(){
+    return board.slice().sort((a,b)=>total(b)-total(a)||(b.scores[1]||0)-(a.scores[1]||0)||a.slot-b.slot);
+  }
+  function paintBoard(){
+    const visible=cup && ['interval','results'].includes(stage);
+    el('cup-board').hidden=!visible;
+    el('room-list').hidden=visible;
+    if(!visible)return;
+    let place=0, previous;
+    el('cup-rows').replaceChildren(...rankBoard().map((r,i)=>{
+      if(!previous || total(r)!==total(previous) || r.scores[1]!==previous.scores[1])place=i+1;
+      previous=r;
+      const row=document.createElement('tr');
+      const label=place+'º '+r.name+(r.uid===selfId?' (você)':'');
+      for(const [j,text] of [label,r.scores[0]??'—',r.scores[1]??'—',total(r)].entries()){
+        const cell=document.createElement(j===0?'th':'td');
+        if(j===0)cell.scope='row';
+        cell.textContent=String(text);row.append(cell);
+      }
+      return row;
+    }));
+  }
+  function updateInterval(){
+    const seconds=Math.max(0,Math.ceil((nextStart-performance.now())/1000));
+    note('Próxima prova: Estaleiro à Deriva. Largada em '+seconds+' s.');
+  }
   function paintList() {
     const rows = stage === 'results' ? standings : members;
     el('room-list').replaceChildren(...rows.map(m => {
@@ -330,14 +371,24 @@ window.createTurboRoom = function createTurboRoom(game) {
     el('room-invite').hidden = !(lobby || done);
     el('room-start').hidden = !host || !(lobby || done);
     el('room-start').disabled = members.length < 2;
-    el('room-start').textContent = done ? 'Nova corrida' : 'Largar';
-    el('room-title').textContent = done ? 'Resultado da sala' : lobby ? 'Sala de amigos' : 'Jogar com amigos';
+    el('room-start').textContent = done ? (cup?'Revanche':'Nova corrida') : (cup?'Largar na Baía':'Largar');
+    el('room-series').textContent=cup?'Copa das Marés':'Circuito do Kraken';
+    el('cup-rules').hidden=!cup || !(lobby || done || stage==='interval');
+    el('room-title').textContent = stage==='interval'?'Placar após a Baía':done ? (cup?'Pódio da Copa':'Resultado da sala') : lobby ? 'Sala de amigos' : 'Jogar com amigos';
     el('room-leave').textContent = setup ? 'Voltar' : 'Sair da sala';
     el('room-enter').textContent = roomKey && !host ? 'Entrar na sala' : 'Criar sala';
     if (lobby || done) el('room-url').value = invite();
-    if (lobby) note(host ? members.length < 2 ? 'Envie o convite a um amigo para liberar a largada.' : 'Todos a bordo. Você já pode dar a largada.' : 'Você está na sala. Aguarde a largada do anfitrião.');
-    if (done) note(host ? 'Convide outros pilotos ou dispute uma nova corrida.' : 'Aguarde o anfitrião iniciar uma nova corrida.');
-    paintList();
+    if (lobby) note((cup?'Baía do Kraken e Estaleiro à Deriva. ':'')+(host ? members.length < 2 ? 'Envie o convite a um amigo para liberar a largada.' : 'Todos a bordo. Você já pode dar a largada.' : 'Você está na sala. Aguarde a largada do anfitrião.'));
+    if (stage==='interval')updateInterval();
+    if (done) {
+      if(cup){
+        const first=rankBoard()[0];
+        const winners=first?board.filter(r=>total(r)===total(first)&&r.scores[1]===first.scores[1]):[];
+        const win=first && total(first)>0?(winners.length===1?first.name+' venceu a Copa':winners.map(r=>r.name).join(' e ')+' dividiram a vitória')+' com '+total(first)+' pontos. ':'Nenhum piloto marcou pontos. ';
+        note(win+(host?'Dispute a revanche com o mesmo convite.':'Aguarde a revanche nesta sala.'));
+      } else note(host ? 'Convide outros pilotos ou dispute uma nova corrida.' : 'Aguarde o anfitrião iniciar uma nova corrida.');
+    }
+    paintList();paintBoard();
   }
   function disconnect() {
     const old = socket;
@@ -363,8 +414,10 @@ window.createTurboRoom = function createTurboRoom(game) {
     if (stage !== 'closed') return;
     [roomKey,hostId=''] = validKey(key) ? key.split('.') : ['', ''];
     legacy=!!hostId; host = !roomKey; stage = 'setup';
+    cup=host || (!legacy && new URLSearchParams(location.hash.slice(1)).get('copa')==='1');
+    leg=0;board=[];
     modal(); paint();
-    note(roomKey ? 'Você recebeu um convite. Escolha seu apelido para entrar.' : 'Crie uma sala para até seis pessoas e compartilhe o link.');
+    note((cup?'Dispute a Baía do Kraken e o Estaleiro à Deriva. ':'')+(roomKey ? 'Escolha seu apelido para entrar.' : 'Crie uma sala para até seis pessoas e compartilhe o link.'));
     if (key && !roomKey) note('Convite inválido. Peça um novo link ou crie sua própria sala.');
     el('room-nick').focus();
   }
@@ -407,6 +460,10 @@ window.createTurboRoom = function createTurboRoom(game) {
   function monitorRoom() {
     if(stage==='connecting' && !host && selfId && performance.now()-lastHello>1500) {hello();return;}
     if(legacy || !active()) return;
+    if(stage==='interval'){
+      updateInterval();
+      if(host && performance.now()>=nextStart)startRound(1);
+    }
     if(host) {
       if(stage!=='race') publish({t:'pulse'});
       return;
@@ -421,8 +478,8 @@ window.createTurboRoom = function createTurboRoom(game) {
   function hostMessage(uid, m) {
     if (!m || typeof m !== 'object') return;
     if (m.t === 'hello') {
-      if (!['lobby','race','results'].includes(stage)) return;
-      if (stage==='race' || pendingStart) {send({t:'reject',reason:'A corrida já começou. Tente de novo após a chegada.'},uid);return;}
+      if (stage==='race' || stage==='interval' || pendingStart) {send({t:'reject',reason:'A corrida já começou. Tente de novo após a chegada.'},uid);return;}
+      if (!['lobby','results'].includes(stage)) return;
       let guest=member(uid);
       if (!guest) {
         if(members.length>=limit) {send({t:'reject',reason:'A sala está cheia.'},uid);return;}
@@ -431,7 +488,7 @@ window.createTurboRoom = function createTurboRoom(game) {
         members.push(guest);
       }
       sync();
-      send({t:'welcome',slot:guest.slot,members,term,round},uid);
+      send({t:'welcome',slot:guest.slot,members,term,round,...(cup && stage==='results'?{board}: {})},uid);
       paint();return;
     }
     const guest=member(uid);
@@ -449,13 +506,28 @@ window.createTurboRoom = function createTurboRoom(game) {
       new Set(list.map(m => m.slot)).size === list.length &&
       (legacy || (list.every(m=>typeof m.uid==='string' && uidPattern.test(m.uid)) && new Set(list.map(m=>m.uid)).size===list.length));
   }
-  function begin() {
+  function startRound(index) {
+    if(pendingStart)return;
+    pendingStart=true;publish({t:'go',round:round+1,members,leg:index});
+  }
+  function begin(index) {
+    leg=index;
+    if(cup && leg===0)board=members.map(({uid,slot,name})=>({uid,slot,name,scores:[null,null]}));
     controls.clear(); latest=null; pendingStart=pendingEnd=false; stage = 'race'; standings = [];
     if (dialog.open) dialog.close();
-    game.begin({host,slot,leaderSlot:legacy?0:member(hostId).slot,members:members.map(m=>({...m}))});
+    game.begin({host,slot,leaderSlot:legacy?0:member(hostId).slot,members:members.map(m=>({...m})),
+      track:cup?(leg===0?'baia':'estaleiro'):null});
   }
   function result(rows) {
     stage = 'results'; standings = rows; latest=null; pendingStart=pendingEnd=false;
+    if(cup){
+      const ranked=rows.filter(row=>row.eligible===true);
+      for(const r of board){
+        const i=ranked.findIndex(row=>row.slot===r.slot);
+        r.scores[leg]=i>=0?prizes[i]:0;
+      }
+      if(leg===0){stage='interval';nextStart=performance.now()+intervalMs;}
+    }
     game.reset(); modal(); paint();
   }
   function receive(uid,m,stamp) {
@@ -466,7 +538,14 @@ window.createTurboRoom = function createTurboRoom(game) {
       if(m.t!=='welcome' || !validMembers(m.members) || !m.members.some(p=>p.slot===m.slot && (legacy || p.uid===selfId))) return;
       if(!legacy && (!m.members.some(p=>p.uid===uid) || !Number.isSafeInteger(m.term))) return;
       clearTimeout(timer); hostId=uid;slot=m.slot;members=m.members;term=m.term||0;round=m.round||0;
-      stage='lobby';heard(stamp);paint();return;
+      stage='lobby';
+      if(cup && Array.isArray(m.board) && m.board.length<=limit && m.board.length &&
+        m.board.every(r=>r && typeof r.name==='string' && uidPattern.test(r.uid) &&
+          Number.isInteger(r.slot) && Array.isArray(r.scores) && r.scores.length===2 &&
+          r.scores.every(v=>v===0||prizes.includes(v)))){
+        board=m.board;stage='results';leg=1;
+      }
+      heard(stamp);paint();return;
     }
     if (!active()) return;
     if (!legacy) {
@@ -500,8 +579,10 @@ window.createTurboRoom = function createTurboRoom(game) {
       // The host already applied join/leave locally. Older echoes must not undo a newer admission.
       if(!host) members=m.members;
       paint();
-    } else if(m.t==='go' && ['lobby','results'].includes(stage) && validMembers(m.members) && m.members.some(p=>p.slot===slot) && Number.isInteger(m.round)) {
-      members=m.members;round=m.round;begin();
+    } else if(m.t==='go' && ['lobby','interval','results'].includes(stage) && validMembers(m.members) && m.members.some(p=>p.slot===slot) && Number.isInteger(m.round) &&
+      (!cup || (m.round===round+1 && m.leg===(stage==='interval'?1:0)))) {
+      members=cup?m.members.filter(m=>member(m.uid)):m.members;
+      round=m.round;begin(cup?m.leg:0);
     } else if(m.t==='state' && stage==='race' && m.round===round && !host) {
       remember(m.v);
     } else if(m.t==='end' && stage==='race' && m.round===round && Array.isArray(m.rows) && m.rows.length<=limit && m.rows.every(r=>r && typeof r.name==='string' && typeof r.score==='string')) {
@@ -520,7 +601,7 @@ window.createTurboRoom = function createTurboRoom(game) {
     selfId=''; term=0; round=0; pendingStart=pendingEnd=false;
     slot = host ? 0 : -1; stage = 'connecting'; paint(); note('Conectando à sala…');
     let current;
-    try { current = new WebSocket('wss://itty.ws/c/turbo-mare-'+(legacy?'v1-':'v2-')+roomKey+'?announce=true&list=true'+(legacy?'':'&echo=true')); }
+    try { current = new WebSocket('wss://itty.ws/c/turbo-mare-'+(cup?'copa-1-':legacy?'v1-':'v2-')+roomKey+'?announce=true&list=true'+(legacy?'':'&echo=true')); }
     catch { fail('Não foi possível abrir a conexão. Tente novamente.'); return; }
     socket = current;
     monitor=setInterval(monitorRoom,1100);
@@ -561,8 +642,7 @@ window.createTurboRoom = function createTurboRoom(game) {
   });
   el('room-start').addEventListener('click',()=>{
     if (!host || !['lobby','results'].includes(stage) || members.length < 2) return;
-    if(pendingStart) return;
-    pendingStart=true; publish({t:'go',round:round+1,members});
+    startRound(0);
   });
   document.addEventListener('visibilitychange',presence);
   window.addEventListener('pagehide',e=>{if(!e.persisted && active()) announceExit();});
@@ -1026,11 +1106,11 @@ function run() {
     else gl.drawArrays(gl.TRIANGLES,0,mesh.count);
   }
 
-  const COURSE_END = 126;
+  let COURSE_END = 126;
   const TIME_LIMIT = 90;
   const QUALIFY = 6;
-  const checkpoints = [3.5,34.5,80];
-  const course = [
+  let checkpoints = [3.5,34.5,80];
+  let course = [
     {x:0,z:13,w:18,l:26,c:'deck'},
     {x:0,z:39,w:16,l:18,c:'deck2'},
     {x:-5.55,z:62.25,w:4.6,l:21.5,c:'purple'},
@@ -1191,7 +1271,7 @@ function run() {
     }
   }
   // Each spring launches toward a landing point. Holding left/right trims the arc.
-  const springs=[
+  let springs=[
     {x:-4.6,z:23,w:3,targetX:-4.6,forward:12.6,lift:8.2},
     {x:6.7,z:45,w:2.5,targetX:10.65,forward:14.1,lift:12.2},
     {x:10.65,z:69,w:2.55,targetX:5.6,forward:14,lift:9.9},
@@ -1204,7 +1284,7 @@ function run() {
     add(trackObjects,soft,p.x,.10,p.z,p.w+.12,.19,2.66,'navy');
     for(const s of [-1,1])add(trackObjects,soft,p.x+s*(p.w*.5-.11),.20,p.z,.18,.20,2.54,'orange');
   }
-  const gates=[{x:-4.6,y:2.25,z:29},{x:9,y:4.15,z:53},{x:8.4,y:2.95,z:75.5},{x:-6.57,y:2.65,z:100.5}];
+  let gates=[{x:-4.6,y:2.25,z:29},{x:9,y:4.15,z:53},{x:8.4,y:2.95,z:75.5},{x:-6.57,y:2.65,z:100.5}];
   const squidX=-11.8,squidZ=109;
   // An oversized luminous lifebuoy frames the finish line.
   add(trackObjects,hoop,0,4.3,127.9,18.6,15.8,9.7,'orange');
@@ -1213,7 +1293,7 @@ function run() {
     const a=.24+i*(Math.PI-.48)/8;
     add(trackObjects,ball,9.15*Math.cos(a),4.3+7.8*Math.sin(a),127.5,.47,.47,.47,'mint',0,0,2);
   }
-  const attacks=[{x:-4.8,z:103.8,offset:0},{x:1.6,z:111,offset:2.2}];
+  let attacks=[{x:-4.8,z:103.8,offset:0},{x:1.6,z:111,offset:2.2}];
   const cycle=t=>((t%4.4)+4.4)%4.4;
   function tentacleEnd(a,t){
     const phase=cycle(t+a.offset);
@@ -1238,6 +1318,7 @@ function run() {
         draw(ball,g.x+1.5*Math.cos(a),g.y+1.5*Math.sin(a),g.z,.24,.24,.24,'white',0,0,2);
       }
     }
+    if(shipyard) {drawShipyard(t);return;}
     drawKraken(t);
     for(const a of attacks){
       const phase=cycle(t+a.offset), height=tentacleEnd(a,t);
@@ -1445,14 +1526,14 @@ function run() {
     }
   }
 
-  const fixedScene=bakeStatic(trackObjects.concat(scenery));
-  const bumpers = [
+  let fixedScene=bakeStatic(trackObjects.concat(scenery));
+  let bumpers = [
     {z:13.5,width:2.6,s:5.5,p:0,w:1.4},
     {z:19.5,width:2.6,s:5.4,p:1.1,w:1.4},
     {z:107.1,width:2.92,s:6.3,p:.6,w:1.9},
     {z:115,width:2.92,s:6.4,p:2.1,w:2.1}
   ];
-  const spinners = [
+  let spinners = [
     {x:0,z:39,r:6.55,w:1.8,p:.8},
     {x:-5.55,z:65,r:1.95,w:3.45,p:0},
     {x:0,z:65,r:1.95,w:-3.45,p:1.2},
@@ -1460,6 +1541,111 @@ function run() {
     {x:0,z:86.5,r:5.65,w:-2.16,p:1.25},
     {x:0,z:121,r:7.3,w:2.52,p:.4}
   ];
+  const bay={course,checkpoints,springs,gates,attacks,spinners,bumpers,fixedScene,finish:COURSE_END};
+  const yard={
+    course:[[0,12,17,28],[0,32,15,12],[-6,46.5,3.2,17],[0,64,16.4,20],
+      [3.2,81.5,9.7,15],[0,104,17,24]].map(([x,z,w,l])=>({x,z,w,l})),
+    checkpoints:[3.5,31,67],springs:[],attacks:[],spinners:[],bumpers:[],finish:109,
+    gates:[{x:1.5,y:1.85,z:53},{x:3.3,y:2.3,z:90.5}]
+  };
+  let shipyard=false;
+  const bridgeZ=46, bridgeWidth=4.5, bridgeLength=10.8;
+  const bridgeX=t=>1.4+3.4*Math.sin(t*.77);
+  const cranes=[{z:20,phase:0},{z:66,phase:1.8},{z:101,phase:3.7}];
+  const loadX=(c,t)=>5.9*Math.sin(t*.93+c.phase);
+  const loadBottom=(c,t)=>.45+2.05*(.5+.5*Math.sin(t*1.31+c.phase));
+  function onBridge(x,z,t){
+    return shipyard && Math.abs(z-bridgeZ)<=bridgeLength/2+.12 && Math.abs(x-bridgeX(t))<=bridgeWidth/2+.12;
+  }
+  // The same corrugated shell is drawn at different scales on ships and crane slings.
+  let cargoShell;
+  function makeCargoShell(){
+    const parts=[[cube,0,0,0,.98,.96,.98,'suit']];
+    for(const side of [-1,1]){
+      for(let i=-5;i<=5;i++) parts.push([cube,side*.49,0,i*.082,.026,.88,.035,'suit']);
+      for(const y of [-.47,.47]) parts.push([cube,side*.49,y,0,.028,.045,1.01,'indigo']);
+      for(const x of [-.39,.39])parts.push([cube,x,0,side*.495,.025,.90,.022,'nickel']);
+      for(const x of [-.47,.47])for(const y of [-.46,.46])parts.push([cube,x,y,side*.5,.075,.08,.04,'brass']);
+    }
+    return assemble(parts);
+  }
+  function buildYard(){
+    const fixed=[];
+    for(const p of yard.course){
+      add(fixed,cube,p.x,-.34,p.z,p.w,.68,p.l,'shark');
+      for(const side of [-1,1]){
+        const x=p.x+side*(p.w/2-.18);
+        add(fixed,cube,x,.017,p.z,.32,.034,p.l,'flannel');
+        for(let z=p.z-p.l/2+.6;z<p.z+p.l/2;z+=1.65)
+          add(fixed,cube,x,.041,z,.32,.025,.61,'ink');
+      }
+      for(let z=p.z-p.l/2+2;z<p.z+p.l/2-.4;z+=3.8){
+        add(fixed,cube,p.x,.014,z,p.w-.8,.025,.05,'indigo');
+        if(p.w>5)add(fixed,cube,p.x,.027,z,.13,.03,1.55,'cream');
+      }
+    }
+    for(const z of [6.5,yard.finish]){
+      for(let i=0;i<20;i++)for(let j=0;j<2;j++)
+        add(fixed,cube,(i-9.5)*.82,.045,z+j*.64,.82,.028,.64,(i+j)%2?'ink':'white');
+    }
+    for(const z of yard.checkpoints.slice(1))add(fixed,cube,0,.04,z,14,.045,.19,'lime');
+    for(const z of [...cranes.map(c=>c.z),bridgeZ,yard.finish]){
+      const high=z===yard.finish?8.1:9.8;
+      for(const side of [-1,1]){
+        const x=side*8.9;
+        for(const dz of [-1.15,1.15]){
+          add(fixed,cube,x,-.48,z+dz,2.1,1.55,1.8,'navy');
+          add(fixed,cube,x,(high-1)/2,z+dz,.45,high+1,.44,'flannel');
+          for(let y=.8;y<high-1;y+=2.5){
+            beam(fixed,[x,y,z+dz],[x,y+2.45,z-dz],.15,'brass');
+          }
+        }
+        add(fixed,soft,x,high+.4,z,1.25,.38,3.1,'indigo');
+        add(fixed,ball,x,high+.73,z,.42,.52,.42,'orange',0,0,2);
+      }
+      for(const dz of [-.63,.63]){
+        for(const y of [high-.72,high+.12])add(fixed,cube,0,y,z+dz,18.4,.27,.24,'flannel');
+        for(let i=0;i<12;i++)beam(fixed,[-9+i*1.5,high-.69,z+dz],[-7.5+i*1.5,high+.11,z+dz],.11,'brass');
+      }
+      add(fixed,soft,-7.9,high-1.26,z,1.55,1.55,1.8,'orange');
+      add(fixed,cube,-7.88,high-1.12,z-.91,1.25,.72,.05,'lensBlue');
+    }
+    for(const [x,z] of [[-15,18],[18,46],[-17,77],[16,100]]){
+      add(fixed,hull,x,-2.8,z,8.1,3.3,25,'navy');
+      add(fixed,cube,x,-1.86,z,7.4,.6,19,'rust');
+      for(let j=0;j<3;j++)for(let k=0;k<2;k++){
+        const xx=x+(k-.5)*3, zz=z+(j-1)*5.7;
+        for(let layer=0;layer<1+(j+k)%2;layer++){
+          const y=-.32+layer*2.45, c=['rust','teal','orange','shark'][(j+k+layer)%4];
+          add(fixed,cube,xx,y,zz,2.84,2.45,5.55,c);
+          for(let rib=-2;rib<=2;rib++)add(fixed,cube,xx,y,zz+rib*1.03,2.94,2.25,.13,c);
+        }
+      }
+    }
+    cargoShell=makeCargoShell();
+    return bakeStatic(fixed);
+  }
+  function selectTrack(useYard){
+    if(shipyard===useYard)return;
+    shipyard=useYard;
+    if(shipyard && !yard.fixedScene)yard.fixedScene=buildYard();
+    const next=shipyard?yard:bay;
+    ({course,checkpoints,springs,gates,attacks,spinners,bumpers,fixedScene}=next);
+    COURSE_END=next.finish;
+    gl.uniform1f(u.deckReady,shipyard?0:1);
+  }
+  function drawShipyard(t){
+    function load(x,z,bottom,w,h,d,tint){
+      draw(cargoShell,x,bottom+h/2,z,w,h,d,tint);
+      draw(soft,x,9.12,z,2.15,.69,1.75,'navy');
+      for(const side of [-1,1])draw(soft,x+side*w*.46,bottom+h+.07,z,.14,.14,d*.95,'flannel');
+      const cableHeight=8.85-(bottom+h+.27);
+      for(const side of [-1,1])for(const end of [-1,1])
+        draw(drum,x+side*w*.42,8.85-cableHeight/2,z+end*d*.40,.07,cableHeight,.07,'ink');
+    }
+    load(bridgeX(t),bridgeZ,-2.25,bridgeWidth,2.25,bridgeLength,'teal');
+    for(const c of cranes)load(loadX(c,t),c.z,loadBottom(c,t),3.05,1.55,2.1,'rescue');
+  }
   function updateObstacles(t) {
     for(const b of bumpers) {
       b.x = Math.sin(t*b.w+b.p)*b.s;
@@ -1468,6 +1654,7 @@ function run() {
     for(const s of spinners) s.a=t*s.w+s.p;
   }
   function drawObstacles(t) {
+    if(shipyard)return;
     for(const b of bumpers)drawCrab(b,t,Math.abs(player.z-b.z)<36);
     for(const s of spinners){
       draw(s.pivot,s.x,0,s.z,1,1,1,'white');
@@ -1500,6 +1687,10 @@ function run() {
   let training=false, beatIndex=-1, online=null, room=null, lastNetSend=0, rankSignature='';
   const netFields=['x','y','z','vx','vy','vz','a','stride','bank','landing','hit','stun','dive','flight','boost','wait','cp','result','raceTime','falls'];
   function freshRace() {
+    selectTrack(online?.track==='estaleiro');
+    $('progress-name').textContent=online?.track?(shipyard?'2/2 · Estaleiro à Deriva':'1/2 · Baía do Kraken'):'Circuito do Kraken';
+    $('cup-leg').hidden=!online?.track;
+    $('cup-leg').textContent=shipyard?'2/2':'1/2';
     seed = 9137;
     const grid = [[0,4.5],[-3.8,5.7],[3.8,5.7],[-1.85,5.3],[1.85,5.35],
       [-5.8,4],[-2.85,2.9],[2.85,2.9],[5.8,4],[0,2]];
@@ -1714,7 +1905,7 @@ function run() {
   }
 
   function floor(x,z) {
-    return course.some(p=>Math.abs(x-p.x)<=p.w/2+.13 && Math.abs(z-p.z)<=p.l/2+.13);
+    return course.some(p=>Math.abs(x-p.x)<=p.w/2+.13 && Math.abs(z-p.z)<=p.l/2+.13) || onBridge(x,z,obstacleTime);
   }
   function splash(r) {
     for(let i=0;i<12;i++) particles.push({x:r.x,y:-3.29,z:r.z,
@@ -1776,6 +1967,11 @@ function run() {
     if(r===player) tone(126,.21,'triangle',0,.49);
   }
   function collideObstacles(r) {
+    if(shipyard)for(const c of cranes){
+      const x=r.x-loadX(c,obstacleTime), z=r.z-c.z, bottom=loadBottom(c,obstacleTime);
+      if(Math.abs(x)<1.82 && Math.abs(z)<1.32 && r.y+1.58>bottom && r.y<bottom+1.55)
+        knock(r,Math.cos(obstacleTime*.93+c.phase),Math.sign(z)||-1);
+    }
     for(const a of attacks){
       if(tentacleEnd(a,obstacleTime)<1.24 && r.y<1.23 && Math.hypot(r.x-a.x,r.z-a.z)<1.36) knock(r,r.x-a.x,1.45);
     }
@@ -1874,6 +2070,7 @@ function run() {
     }
     if(speed<=.28)r.bank=(r.bank||0)*Math.exp(-9*dt);
     r.stride+=dt*speed*1.95;
+    if(r.ground && onBridge(r.x,r.z,obstacleTime-dt))r.x+=bridgeX(obstacleTime)-bridgeX(obstacleTime-dt);
     r.x+=r.vx*dt;
     r.z+=r.vz*dt;
     const prevY=r.y;
@@ -1912,7 +2109,7 @@ function run() {
           tone(698,.17,'triangle',.09);
         }
       }
-      if (r.z>=COURSE_END && r.z<=128 && Math.abs(r.x)<8.65) {
+      if (r.z>=COURSE_END && r.z<=COURSE_END+2 && Math.abs(r.x)<8.65) {
         finishers.push(r);
         r.result=finishers.length;
         r.raceTime=elapsed;
@@ -1953,8 +2150,9 @@ function run() {
     const percent = Math.floor(clamp((progressOf(player)-4.5)/(COURSE_END-4.5),0,1)*100);
     $('place').textContent=training?'Treino':rank+'º';
     $('field-size').textContent=training?'':'/ '+racers.length;
-    $('sector').textContent=player.z<35?'Píer de largada':player.z<77?(player.x>8?'Atalho do recife':'Passagem do recife'):player.z<100?'Canal da mola':'Baía do Kraken';
-    $('ring-score').textContent='◎ '+player.gates.size+'/4';
+    $('sector').textContent=shipyard?(player.z<30?'Estaleiro · Pórtico de carga':player.z<54?'Estaleiro · Doca seca':player.z<90?'Estaleiro · Cais de montagem':'Estaleiro · Doca de chegada'):
+      player.z<35?'Píer de largada':player.z<77?(player.x>8?'Atalho do recife':'Passagem do recife'):player.z<100?'Canal da mola':'Baía do Kraken';
+    $('ring-score').textContent='◎ '+player.gates.size+'/'+gates.length;
     document.body.dataset.turbo=(player.boost>0||player.flight>0)?'on':'off';
     $('percent').textContent=percent+'%';
     $('fill').style.width=percent+'%';
@@ -2027,12 +2225,14 @@ function run() {
     updateObstacles(obstacleTime);
     for(const r of racers) moveRacer(r,dt);
     separateRacers();
-    if(!gapHint && !player.flight && player.z>20 && player.z<25.8) {
+    if(shipyard && !gapHint && player.z>29 && player.z<38){
+      gapHint=true;notify('Cais à esquerda ou salto pelo contêiner!');
+    } else if(!shipyard && !gapHint && !player.flight && player.z>20 && player.z<25.8) {
       gapHint=true;
       notify(matchMedia('(pointer:coarse)').matches?'Pule para atravessar o vão':'Espaço para atravessar o vão');
     }
     if (online && (racers.every(r=>r.result||r.left) || elapsed>=TIME_LIMIT)) {
-      room.finish(roomOrder().map(r=>({name:r.name,slot:r.i,score:roomScore(r)})));
+      room.finish(roomOrder().map(r=>({name:r.name,slot:r.i,score:roomScore(r),eligible:!!r.result||(!r.left&&r.cp>0)})));
       return;
     }
     if(!online && (player.result||finishers.length>=QUALIFY||(!training && elapsed>=TIME_LIMIT))) {

@@ -17,6 +17,12 @@ Para instalar, abra o link no Chrome ou Edge e use **Instalar jogo** quando apar
 - **Treino livre** abre a pista para uma volta solo, sem limite de tempo.
 - **Pilotos** permite girar o modelo por arraste, experimentar quatro animações e escolher Lontra, Tubarão, Axolote ou Marujo.
 
+### Copa das Marés
+
+Em **Jogar com amigos**, crie uma sala, compartilhe o convite e selecione **Largar na Baía**. A primeira prova é a Baía do Kraken. O placar aparece na chegada e a segunda prova começa automaticamente após dez segundos. No Estaleiro à Deriva, desvie das cargas em movimento e escolha entre o cais estreito e o atalho pelo contêiner suspenso.
+
+Cada prova distribui **10, 8, 6, 4, 2 e 1 ponto** por colocação. Quem cruza a linha fica à frente. Ao fim dos 90 segundos, os pilotos que ainda correm e alcançaram um checkpoint também pontuam, em ordem de progresso. A maior soma vence. Em caso de empate, vale a pontuação do Estaleiro. Se o empate persistir, a colocação é compartilhada. No pódio, **Revanche** inicia outra copa com o mesmo convite e o placar zerado.
+
 | Ação | Computador | Tela de toque |
 | --- | --- | --- |
 | Mover | WASD ou setas | Controle direcional à esquerda |
