@@ -85,6 +85,10 @@ async function main() {
 
   await send('Runtime.enable');
   await send('Page.enable');
+  if (['--host','--guest'].includes(process.argv[2])) {
+    await require('./salas.cjs').verify({send,evaluate,until,click,key,screenshot});
+    return;
+  }
   if (process.argv[2] === '--pwa') {
     const entry = new URL(process.argv[3]);
     const navigations = [];

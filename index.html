@@ -23,6 +23,22 @@ button:focus-visible{outline:3px solid #fff;outline-offset:4px}
 .app-tools button:focus-visible{outline:2px solid #ffbc42;outline-offset:2px}
 #offline-state::before{content:"";display:inline-block;width:7px;height:7px;margin-right:6px;background:#8cf0ba;border-radius:50%}
 #install-help{max-width:330px;margin-top:6px;background:#102a3aeb;color:#fff2d8;padding:8px 10px;border-radius:5px;font-size:13px}
+#friends,#room-copy,#room-leave,#race-leave{border:1px solid #9edbcd;border-radius:5px;background:#143c4c;color:#fff4d9;padding:10px 14px;font-weight:750}
+#room,#race-exit{box-sizing:border-box;width:min(430px,94vw);max-height:90dvh;overflow:auto;border:1px solid #8ad7bf;border-radius:16px;padding:clamp(18px,4vw,30px);background:#103644;color:#fff1d7;box-shadow:0 18px 65px #051c35aa}
+#room::backdrop,#race-exit::backdrop{background:#071c30a8}
+#room h2,#race-exit h2{font-size:clamp(25px,5vw,34px);line-height:1.1;margin:12px 0}
+#room p,#race-exit p{line-height:1.4;color:#d2e6e3;margin:9px 0 17px}
+#room label{display:block;font-weight:750;font-size:13px}
+#room input{box-sizing:border-box;display:block;width:100%;min-width:0;font:inherit;font-size:16px;background:#092a36;color:#fff1d7;border:1px solid #64a69f;border-radius:5px;padding:9px 10px;margin:4px 0 10px}
+#room .invite-row,.room-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#room .invite-row{flex-wrap:nowrap;margin:4px 0 8px}
+#room .invite-row input{margin:0;flex:1}#room-copy{white-space:nowrap}
+#room-list,#race-list{list-style:none;margin:10px 0 16px;padding:0}
+#room-list:empty{display:none}#room-list li{display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid #91d9c936;padding:6px 0}
+#room-list li span{font-size:12px;color:#abe4d6}
+#room-ranks{position:absolute;top:76px;right:12px;max-width:min(250px,65vw);background:#102e40ed;border:1px solid #94cbb982;border-radius:6px;padding:6px 9px;font-size:12px;color:#fff2d8;pointer-events:auto}
+#room-ranks summary{cursor:pointer;font-weight:750}#race-list{margin:6px 0 0}#race-list li{padding:2px 0}
+@media(max-width:620px){.menu-buttons #friends{padding:9px}#room-ranks{top:65px}}
 #scene{position:absolute;inset:0;background:linear-gradient(180deg,#24426d 0%,#8274a9 34%,#f4a68f 64%,#ffd5a7 84%,#f9be99 100%);overflow:hidden}
 #scene::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 73% 42%,#fff8c8 0 5.9%,#ffddaa 6% 7%,#ffdcb96b 9%,transparent 25%);pointer-events:none}
 body:not([data-mode=menu]) #scene{background:linear-gradient(180deg,#24426d,#7875a6 17%,#eda48e 40%,#ffd5a7)}
@@ -156,12 +172,25 @@ body[data-turbo="on"] #hud::before{opacity:1}
     <div class="eyebrow">Circuito do Kraken</div>
     <h1>TURBO<span>MARÉ</span></h1>
     <p>Pegue os anéis de turbo e escape dos tentáculos para chegar entre os seis primeiros.</p>
-    <div class="menu-buttons"><button class="primary" id="play">Disputar corrida <span aria-hidden="true">▶</span></button><button id="practice">Treino livre</button><button id="crew-open">Pilotos</button></div>
+    <div class="menu-buttons"><button class="primary" id="play">Disputar corrida <span aria-hidden="true">▶</span></button><button id="friends">Jogar com amigos</button><button id="practice">Treino livre</button><button id="crew-open">Pilotos</button></div>
     <div class="menu-foot"><span><kbd>WASD</kbd> ou setas</span><span><kbd>Espaço</kbd> Pular</span><span><kbd>Shift</kbd> Mergulhar</span></div>
     <div class="app-tools"><button type="button" id="install-game" aria-controls="install-help" hidden>Instalar jogo</button><span id="offline-state" role="status" hidden>Pronto para jogar offline</span></div>
     <div id="install-help" hidden>No Safari, toque em Compartilhar e depois em Adicionar à Tela de Início.</div>
   </div>
 </main>
+<dialog id="room" aria-labelledby="room-title">
+  <form id="room-form">
+    <div class="eyebrow">Circuito do Kraken</div>
+    <h2 id="room-title">Jogar com amigos</h2>
+    <p id="room-status" role="status"></p>
+    <label id="room-nick-label" for="room-nick">Seu apelido<input id="room-nick" maxlength="18" placeholder="Piloto" autocomplete="nickname"></label>
+    <button id="room-enter" type="submit" class="primary">Criar sala</button>
+  </form>
+  <div id="room-invite" hidden><label for="room-url">Link do convite</label><div class="invite-row"><input id="room-url" readonly><button id="room-copy" type="button">Copiar link</button></div></div>
+  <ol id="room-list"></ol>
+  <div class="room-actions"><button id="room-start" class="primary" hidden>Largar</button><button id="room-leave">Voltar</button></div>
+</dialog>
+<dialog id="race-exit" aria-labelledby="exit-title"><h2 id="exit-title">Sair da corrida?</h2><p id="exit-info"></p><div class="room-actions"><button id="race-stay" class="primary">Continuar</button><button id="race-leave">Sair da sala</button></div></dialog>
 <section id="dock" aria-label="Escolha do piloto" hidden>
   <button id="crew-back" class="secondary">‹ Menu</button>
   <div class="crew-card">
@@ -181,6 +210,7 @@ body[data-turbo="on"] #hud::before{opacity:1}
     </div>
   </div>
   <div id="stage"><span id="sector">Píer de largada</span> <b id="ring-score">◎ 0/4</b></div>
+  <details id="room-ranks" hidden><summary>Classificação</summary><ol id="race-list"></ol></details>
   <div id="count" hidden></div><div id="toast" role="status" hidden></div>
 </div>
 <div id="settings"><button class="icon" id="sound" aria-label="Desativar som" title="Desativar som">♫</button></div>
@@ -250,6 +280,219 @@ body[data-turbo="on"] #hud::before{opacity:1}
       .catch(error => console.warn('Armazenamento offline indisponível.', error));
   }
 })();
+</script>
+<script>
+'use strict';
+
+window.createTurboRoom = function createTurboRoom(game) {
+  const el = id => document.getElementById(id);
+  const dialog = el('room');
+  const limit = 6;
+  const prefix = 'turbo-mare-v1-';
+  const links = new Map();
+  const controls = new Map();
+  let members = [], socket = null, hostId = '', host = false, slot = -1;
+  let stage = 'closed', roomKey = '', round = 0, timer = 0, standings = [];
+  const nickname = text => (typeof text === 'string' ? text.trim().replace(/[\u0000-\u001f\u007f]/g,'').slice(0,18) : '') || 'Piloto';
+  const validPilot = value => Number.isInteger(value) && value >= 0 && value < 4 ? value : 0;
+  const invited = () => new URLSearchParams(location.hash.slice(1)).get('sala');
+  const validKey = key => typeof key === 'string' && /^[a-f0-9]{32}\.[A-Za-z0-9_-]{4,32}$/.test(key);
+  const invite = () => { const url = new URL(location.href); url.hash = 'sala=' + roomKey + '.' + hostId; return url.href; };
+  function modal() { if (!dialog.open) dialog.showModal(); }
+  function note(text) { el('room-status').textContent = text; }
+  function send(message, target) {
+    if (socket?.readyState !== WebSocket.OPEN) return;
+    if (socket.bufferedAmount > 32768 && message.t === 'state') return;
+    // Itty's direct-message frame puts the recipient UID between two unit separators.
+    const address = target ? '\u001f'+target+'\u001f' : '';
+    socket.send(address + JSON.stringify(message));
+  }
+  function broadcast(message) { if (links.size) send(message); }
+  function sync() { broadcast({t:'lobby', members}); }
+  function paintList() {
+    const rows = stage === 'results' ? standings : members;
+    el('room-list').replaceChildren(...rows.map(m => {
+      const item = document.createElement('li'), name = document.createElement('strong'), detail = document.createElement('span');
+      name.textContent = m.name + (m.slot === slot ? ' (você)' : '');
+      detail.textContent = stage === 'results' ? m.score : (m.slot === 0 ? 'Anfitrião' : 'Conectado');
+      item.append(name,detail);
+      return item;
+    }));
+  }
+  function paint() {
+    const setup = stage === 'setup' || stage === 'failed', lobby = stage === 'lobby', done = stage === 'results';
+    el('room-nick-label').hidden = el('room-enter').hidden = !setup;
+    el('room-invite').hidden = !(lobby || done);
+    el('room-start').hidden = !host || !(lobby || done);
+    el('room-start').disabled = members.length < 2;
+    el('room-start').textContent = done ? 'Nova corrida' : 'Largar';
+    el('room-title').textContent = done ? 'Resultado da sala' : lobby ? 'Sala de amigos' : 'Jogar com amigos';
+    el('room-leave').textContent = setup ? 'Voltar' : 'Sair da sala';
+    el('room-enter').textContent = roomKey && !host ? 'Entrar na sala' : 'Criar sala';
+    if (lobby || done) el('room-url').value = invite();
+    if (lobby) note(host ? members.length < 2 ? 'Envie o convite a um amigo para liberar a largada.' : 'Todos a bordo. Você já pode dar a largada.' : 'Você está na sala. Aguarde a largada do anfitrião.');
+    if (done) note(host ? 'Convide outros pilotos ou dispute uma nova corrida.' : 'Aguarde o anfitrião iniciar uma nova corrida.');
+    paintList();
+  }
+  function disconnect() {
+    const old = socket;
+    socket = null; links.clear(); controls.clear();
+    clearTimeout(timer);
+    if (old) old.close();
+  }
+  function fail(text) {
+    const wasHost = host;
+    disconnect(); members = []; standings = []; stage = 'failed';
+    if (wasHost) roomKey = '';
+    game.reset(); modal(); paint(); note(text);
+  }
+  function leave() {
+    if (host) broadcast({t:'closed'});
+    else send({t:'bye'},hostId);
+    disconnect(); stage = 'closed'; host = false; slot = -1; roomKey = ''; members = []; standings = [];
+    if (invited()) { const url = new URL(location.href); url.hash = ''; history.replaceState(null,'',url); }
+    if (dialog.open) dialog.close();
+    game.reset();
+  }
+  function setup(key) {
+    if (stage !== 'closed') return;
+    [roomKey,hostId] = validKey(key) ? key.split('.') : ['', ''];
+    host = !roomKey; stage = 'setup';
+    modal(); paint();
+    note(roomKey ? 'Você recebeu um convite. Escolha seu apelido para entrar.' : 'Crie uma sala para até seis pessoas e compartilhe o link.');
+    if (key && !roomKey) note('Convite inválido. Peça um novo link ou crie sua própria sala.');
+    el('room-nick').focus();
+  }
+  function removeGuest(uid) {
+    if (!links.has(uid)) return;
+    const seat = links.get(uid);
+    links.delete(uid); controls.delete(seat);
+    members = members.filter(m=>m.slot !== seat);
+    if (stage === 'race') game.gone(seat);
+    else { sync(); paint(); }
+  }
+  function hostMessage(uid, m) {
+    if (!m || typeof m !== 'object') return;
+    if (m.t === 'hello') {
+      if (links.has(uid)) return;
+      const reason = stage === 'race' ? 'A corrida já começou. Tente de novo após a chegada.' :
+        members.length >= limit ? 'A sala está cheia.' : '';
+      if (reason) { send({t:'reject',reason},uid); return; }
+      if (!['lobby','results'].includes(stage)) return;
+      let seat = 1; while (members.some(member=>member.slot === seat)) seat++;
+      links.set(uid,seat);
+      members.push({slot:seat,name:nickname(m.name),pilot:validPilot(m.pilot)});
+      send({t:'welcome',slot:seat,members},uid); sync(); paint();
+      return;
+    }
+    if (!links.has(uid)) return;
+    if (m.t === 'bye') { removeGuest(uid); return; }
+    if (m.t === 'input' && stage === 'race' && m.round === round &&
+        Array.isArray(m.v) && m.v.length === 4 && m.v.every(Number.isFinite)) {
+      const seat = links.get(uid), [x,z,j,d] = m.v, previous = controls.get(seat);
+      controls.set(seat,{x:Math.max(-1,Math.min(1,x)),z:Math.max(-1,Math.min(1,z)),
+        jump:Math.max(previous?.jump||0,j===1?.145:0),dive:Math.max(previous?.dive||0,d===1?.14:0),at:performance.now()});
+    }
+  }
+  function validMembers(list) {
+    return Array.isArray(list) && list.length > 0 && list.length <= limit &&
+      list.every(m => m && Number.isInteger(m.slot) && m.slot >= 0 && m.slot < limit && typeof m.name === 'string' && m.name.length <= 18 && validPilot(m.pilot) === m.pilot) &&
+      new Set(list.map(m => m.slot)).size === list.length && list.some(m => m.slot === 0);
+  }
+  function begin() {
+    controls.clear(); stage = 'race'; standings = [];
+    if (dialog.open) dialog.close();
+    game.begin({host,slot,members:members.map(m=>({...m}))});
+  }
+  function result(rows) {
+    stage = 'results'; standings = rows;
+    game.reset(); modal(); paint();
+  }
+  function receive(m) {
+    if (!m || typeof m !== 'object') return;
+    if (m.t === 'reject') { fail(String(m.reason).slice(0,120)); return; }
+    if (m.t === 'closed') { fail('O anfitrião encerrou a sala.'); return; }
+    if (m.t === 'welcome' && stage === 'connecting' && validMembers(m.members) && m.members.some(p=>p.slot===m.slot && p.slot>0)) {
+      clearTimeout(timer); slot = m.slot; members = m.members; stage = 'lobby'; paint();
+    } else if (m.t === 'lobby' && ['lobby','results'].includes(stage) && validMembers(m.members)) {
+      members = m.members; paint();
+    } else if (m.t === 'go' && ['lobby','results'].includes(stage) && validMembers(m.members) && m.members.some(p=>p.slot===slot) && Number.isInteger(m.round)) {
+      members = m.members; round = m.round; begin();
+    } else if (m.t === 'state' && stage === 'race' && m.round === round) {
+      game.apply(m.v);
+    } else if (m.t === 'end' && stage === 'race' && m.round === round && Array.isArray(m.rows) && m.rows.length<=limit && m.rows.every(r=>r && typeof r.name==='string' && typeof r.score==='string')) {
+      result(m.rows);
+    }
+  }
+  function connect() {
+    if (!['setup','failed'].includes(stage)) return;
+    if (!navigator.onLine) { note('Conecte-se à internet para abrir uma sala.'); return; }
+    if (!/^https?:$/.test(location.protocol) || !window.WebSocket) {
+      note('Abra o jogo pelo GitHub Pages em um navegador atualizado.'); return;
+    }
+    const name = nickname(el('room-nick').value);
+    try { localStorage.setItem('mare-apelido',name); } catch {}
+    if (host) roomKey = Array.from(crypto.getRandomValues(new Uint8Array(16)), n=>n.toString(16).padStart(2,'0')).join('');
+    slot = host ? 0 : -1; stage = 'connecting'; paint(); note('Conectando à sala…');
+    let current;
+    try { current = new WebSocket('wss://itty.ws/c/'+prefix+roomKey+'?announce=true&list=true'); }
+    catch { fail('Não foi possível abrir a conexão. Tente novamente.'); return; }
+    socket = current;
+    timer = setTimeout(()=>{if(socket===current) fail('A conexão demorou. Confira o convite e tente novamente.');},25000);
+    current.onmessage = event => {
+      if (socket !== current || typeof event.data !== 'string' || event.data.length > 24000) return;
+      let packet;
+      try { packet = JSON.parse(event.data); } catch { return; }
+      if (!packet || typeof packet !== 'object') return;
+      const {uid,type,self,message} = packet;
+      if (typeof uid !== 'string') return;
+      if (type === 'join' && self && stage === 'connecting') {
+        if (host) {
+          hostId=uid; clearTimeout(timer); members=[{slot:0,name,pilot:game.pilot()}]; stage='lobby'; paint();
+        } else if (Array.isArray(packet.users) && !packet.users.some(u=>u.uid===hostId)) {
+          fail('Sala não encontrada. Peça um novo convite ao anfitrião.');
+        } else send({t:'hello',name,pilot:game.pilot()},hostId);
+      } else if (type === 'leave') {
+        if (host) removeGuest(uid);
+        else if (uid === hostId) fail('O anfitrião encerrou a sala.');
+      } else if (message && !type) {
+        if (host) hostMessage(uid,message);
+        else if (uid === hostId) receive(message);
+      }
+    };
+    current.onclose = ()=>{if(socket===current)fail('A conexão da sala terminou. Confira a rede e entre novamente.');};
+    current.onerror = ()=>{if(socket===current)fail('Não foi possível conectar ao serviço de salas. Tente novamente.');};
+  }
+  try { el('room-nick').value=localStorage.getItem('mare-apelido')||''; } catch {}
+  el('friends').addEventListener('click',()=>setup(invited()));
+  el('room-form').addEventListener('submit',e=>{e.preventDefault();connect();});
+  el('room-leave').addEventListener('click', leave);
+  dialog.addEventListener('cancel',e=>{e.preventDefault();leave();});
+  el('room-copy').addEventListener('click',async ()=>{
+    try { await navigator.clipboard.writeText(invite()); note('Link copiado. Envie para seus amigos.'); }
+    catch { el('room-url').select(); note('Selecione e copie o link para convidar seus amigos.'); }
+  });
+  el('room-start').addEventListener('click',()=>{
+    if (!host || !['lobby','results'].includes(stage) || members.length < 2) return;
+    round++; broadcast({t:'go',round,members}); begin();
+  });
+  window.addEventListener('hashchange',()=>{if(invited()) setup(invited());});
+  if (invited() !== null) setup(invited());
+  return {
+    leave,
+    input(v) { send({t:'input',round,v},hostId); },
+    state(v) { broadcast({t:'state',round,v}); },
+    control(seat,dt) {
+      const c = controls.get(seat);
+      if (!c || performance.now()-c.at > 1000) return [0,0,false,false];
+      const out = [c.x,c.z,c.jump>0,c.dive>0];
+      c.jump=Math.max(0,c.jump-dt); c.dive=Math.max(0,c.dive-dt);
+      return out;
+    },
+    consume(seat,action) {const c=controls.get(seat);if(c)c[action]=0;},
+    finish(rows) { broadcast({t:'end',round,rows}); result(rows); }
+  };
+};
 </script>
 <script>
 'use strict';
@@ -973,6 +1216,7 @@ function run() {
     const sheet=document.createElement('canvas');
     sheet.width=1024;sheet.height=Math.min(4096,gl.getParameter(gl.MAX_TEXTURE_SIZE));
     const ctx=sheet.getContext('2d',{alpha:false});
+    if (!ctx) return;
     const W=sheet.width,H=sheet.height;
     ctx.setTransform(W/28,0,0,H/136,W/2,0);
     const box=(x,z,w,l,c)=>{ctx.fillStyle=c;ctx.fillRect(x,136-z-l,w,l);};
@@ -1160,7 +1404,8 @@ function run() {
   const format = (time) => Math.floor(time/60)+':'+String(Math.floor(time%60)).padStart(2,'0');
   const timeResult = (time) => time.toFixed(2).replace('.',',')+' s';
 
-  let training=false, beatIndex=-1;
+  let training=false, beatIndex=-1, online=null, room=null, lastNetSend=0, rankSignature='';
+  const netFields=['x','y','z','vx','vy','vz','a','stride','bank','landing','hit','stun','dive','flight','boost','wait','cp','result','raceTime','falls'];
   function freshRace() {
     seed = 9137;
     const grid = [[0,4.5],[-3.8,5.7],[3.8,5.7],[-1.85,5.3],[1.85,5.35],
@@ -1172,7 +1417,14 @@ function run() {
       error:random(), nextJump:0,flight:0,boost:0,gates:new Set(),springLock:0
     }));
     if(training) racers=racers.slice(0,1);
-    player = racers[0];
+    if (online) {
+      racers = racers.filter(r=>online.members.some(m=>m.slot===r.i));
+      for(const r of racers) {
+        const m=online.members.find(m=>m.slot===r.i);
+        r.name=m.name; r.pilot=m.pilot; r.left=false; r.reaction=.2; r.bias=0;
+      }
+    }
+    player = online ? racers.find(r=>r.i===online.slot) : racers[0];
     beatIndex=-1;
     finishers = [];
     particles = [];
@@ -1193,6 +1445,7 @@ function run() {
     $('menu').hidden=next!=='menu';
     $('hud').hidden=next==='menu'||next==='dock';
     $('dock').hidden=next!=='dock';
+    $('room-ranks').hidden=!online || !['race','countdown'].includes(next);
     $('touch').hidden=next!=='race';
     $('pause').disabled=!['countdown','race'].includes(next);
     $('modal').hidden=!['paused','result'].includes(next);
@@ -1214,6 +1467,15 @@ function run() {
     $('play').focus();
   }
   function pauseRace() {
+    if (online) {
+      clearControls();
+      if ($('race-exit').open) $('race-exit').close();
+      else {
+        $('exit-info').textContent=online.host?'Sair encerra a sala para todos os pilotos.':'A corrida continuará para os outros pilotos.';
+        $('race-exit').showModal();
+      }
+      return;
+    }
     if (mode==='paused') {
       setMode(resumeMode);
       $('world').focus();
@@ -1307,8 +1569,13 @@ function run() {
   window.addEventListener('keydown',event=>{
     if(event.altKey||event.ctrlKey||event.metaKey) return;
     const key=event.code;
-    if(key==='Escape' && !event.repeat) {pauseRace();return;}
-    if(key==='KeyR' && mode==='race' && !event.repeat) {startRace();return;}
+    if(key==='Escape' && !event.repeat) {
+      if ($('room').open) return;
+      if (online) event.preventDefault();
+      pauseRace();return;
+    }
+    if ($('race-exit').open) return;
+    if(key==='KeyR' && !online && mode==='race' && !event.repeat) {startRace();return;}
     if(!['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowLeft','ArrowDown','ArrowRight','Space','ShiftLeft','ShiftRight'].includes(key)) return;
     if(!['race','countdown'].includes(mode)) return;
     event.preventDefault();
@@ -1317,7 +1584,7 @@ function run() {
     keys.add(key);
   });
   window.addEventListener('keyup',event=>keys.delete(event.code));
-  window.addEventListener('blur',()=>{clearControls();if(['countdown','race'].includes(mode)) pauseRace();});
+  window.addEventListener('blur',()=>{clearControls();if(!online && ['countdown','race'].includes(mode)) pauseRace();});
   function clearControls() {
     keys.clear();
     jumpPressed=divePressed=0;
@@ -1436,7 +1703,7 @@ function run() {
     }
   }
   function moveRacer(r,dt) {
-    if(r.result) return;
+    if(r.result || r.left) return;
     if(r.wait>0) {
       r.wait-=dt;
       if(r.wait<=0) respawn(r);
@@ -1458,18 +1725,19 @@ function run() {
     r.hit=Math.max(0,r.hit-dt);
     r.nextJump=Math.max(0,r.nextJump-dt);
     r.coyote=r.ground?.105:Math.max(0,r.coyote-dt);
-    let [x,z,jump,dive]=r===player?playerInput():botInput(r);
+    let [x,z,jump,dive]=r===player?playerInput():online?room.control(r.i,dt):botInput(r);
     const magnitude=Math.hypot(x,z);
     if(magnitude>1) {x/=magnitude;z/=magnitude;}
     if(r.flight>0){
       r.flight=Math.max(0,r.flight-dt);
-      if(r===player) r.vx=clamp(r.vx+x*dt*3,-7,7);
+      if(r===player || online) r.vx=clamp(r.vx+x*dt*3,-7,7);
     } else if(r.stun<=0) {
       if(jump && r.coyote>0 && r.dive<=0) {
         r.vy=9.35;
         r.ground=false;
         r.coyote=0;
         r.nextJump=.39;
+        if(online && r!==player) room.consume(r.i,'jump');
         if(r===player) {jumpPressed=0;tone(320,.13,'triangle',0,1.65);}
       }
       if(dive && r.dive<=0 && !r.dove && r.y>-.32) {
@@ -1483,10 +1751,11 @@ function run() {
         r.coyote=0;
         r.dive=.54;
         r.dove=true;
+        if(online && r!==player) room.consume(r.i,'dive');
         if(r===player) {divePressed=0;tone(285,.17,'triangle',0,.57);}
       }
       if(r.dive<=0) {
-        const speed=(r===player?8.7:r.speed)*(r.boost>0?1.53:1);
+        const speed=(online||r===player?8.7:r.speed)*(r.boost>0?1.53:1);
         const a=1-Math.exp(-dt*(r.ground?18:8));
         r.vx=mix(r.vx,x*speed,a);
         r.vz=mix(r.vz,z*speed,a);
@@ -1564,10 +1833,10 @@ function run() {
   function separateRacers() {
     for(let i=0;i<racers.length;i++) {
       const a=racers[i];
-      if(a.wait>0 || a.result || a.y<-.3) continue;
+      if(a.left || a.wait>0 || a.result || a.y<-.3) continue;
       for(let j=i+1;j<racers.length;j++) {
         const b=racers[j];
-        if(b.wait>0 || b.result || Math.abs(b.y-a.y)>.7) continue;
+        if(b.left || b.wait>0 || b.result || Math.abs(b.y-a.y)>.7) continue;
         const x=a.x-b.x,z=a.z-b.z,d=Math.hypot(x,z);
         if(d>=.72) continue;
         const push=(.72-d)*.44;
@@ -1586,7 +1855,7 @@ function run() {
     notice=1.55;
   }
   function updateHUD() {
-    const rank = player.result || 1 + racers.filter(r=>r!==player&&(r.result||progressOf(r)>progressOf(player)+.04)).length;
+    const rank = player.result || 1 + racers.filter(r=>!r.left && r!==player&&(r.result||progressOf(r)>progressOf(player)+.04)).length;
     document.body.dataset.turbo='off';
     const percent = Math.floor(clamp((progressOf(player)-4.5)/(COURSE_END-4.5),0,1)*100);
     $('place').textContent=training?'Treino':rank+'º';
@@ -1597,10 +1866,42 @@ function run() {
     $('percent').textContent=percent+'%';
     $('fill').style.width=percent+'%';
     $('time').textContent=training?format(elapsed):format(Math.ceil(Math.max(0,TIME_LIMIT-elapsed)));
+    if (online) {
+      $('slots').previousElementSibling.textContent='Chegada';
+      $('slots').textContent=finishers.length+' / '+racers.filter(r=>!r.left || r.result).length;
+      const labels=roomOrder().map((r,i)=>(i+1)+'º  '+r.name+(r===player?' (você)':'')+' · '+roomScore(r));
+      const signature=JSON.stringify(labels);
+      if(signature!==rankSignature) {
+        rankSignature=signature;
+        $('race-list').replaceChildren(...labels.map(label=>{const li=document.createElement('li');li.textContent=label;return li;}));
+      }
+      return;
+    }
+    if($('slots').previousElementSibling) $('slots').previousElementSibling.textContent='Vagas';
     $('slots').textContent=training?'Livre':Math.max(0,QUALIFY-finishers.length)+' / '+QUALIFY;
   }
+  function roomOrder() {
+    return racers.slice().sort((a,b)=>(a.result||999)-(b.result||999)||Number(a.left)-Number(b.left)||progressOf(b)-progressOf(a)||a.i-b.i);
+  }
+  function roomScore(r) {
+    if(r.result) return r.result+'º · '+timeResult(r.raceTime);
+    if(r.left) return 'Saiu';
+    return Math.floor(clamp((progressOf(r)-4.5)/(COURSE_END-4.5),0,1)*100)+'%';
+  }
   function progressOf(r) {return r.wait>0?checkpoints[r.cp]:r.z;}
+  function playRaceBeat() {
+    const beat=Math.floor(elapsed/.212);
+    if(beat!==beatIndex){
+      beatIndex=beat;
+      const notes=[146.83,0,220,0,174.61,196,0,130.81,146.83,0,261.63,220,0,196,174.61,0];
+      const note=notes[beat%notes.length];
+      if(note) tone(note,.11,'triangle',0,.985,.032);
+      if(beat%4===0) tone(104,.105,'sine',0,.40,.065);
+      if(beat%8===6) tone(741,.045,'triangle',0,.62,.024);
+    }
+  }
   function step(dt) {
+    if (online && !online.host) { clientStep(dt); return; }
     if(mode==='dock'){
       dockTime+=dt;
       obstacleTime+=dt*.6;
@@ -1628,15 +1929,7 @@ function run() {
       return;
     }
     elapsed+=dt;
-    const beat=Math.floor(elapsed/.212);
-    if(beat!==beatIndex){
-      beatIndex=beat;
-      const notes=[146.83,0,220,0,174.61,196,0,130.81,146.83,0,261.63,220,0,196,174.61,0];
-      const note=notes[beat%notes.length];
-      if(note) tone(note,.11,'triangle',0,.985,.032);
-      if(beat%4===0) tone(104,.105,'sine',0,.40,.065);
-      if(beat%8===6) tone(741,.045,'triangle',0,.62,.024);
-    }
+    playRaceBeat();
     obstacleTime+=dt;
     updateObstacles(obstacleTime);
     for(const r of racers) moveRacer(r,dt);
@@ -1645,7 +1938,11 @@ function run() {
       gapHint=true;
       notify(matchMedia('(pointer:coarse)').matches?'Pule para atravessar o vão':'Espaço para atravessar o vão');
     }
-    if(player.result||finishers.length>=QUALIFY||(!training && elapsed>=TIME_LIMIT)) {
+    if (online && (racers.every(r=>r.result||r.left) || racers.filter(r=>!r.left).length<2 || elapsed>=TIME_LIMIT)) {
+      room.finish(roomOrder().map(r=>({name:r.name,slot:r.i,score:roomScore(r)})));
+      return;
+    }
+    if(!online && (player.result||finishers.length>=QUALIFY||(!training && elapsed>=TIME_LIMIT))) {
       updateHUD();
       finishRace(player.result>0 && player.result<=QUALIFY);
       return;
@@ -1945,8 +2242,8 @@ function run() {
   }
 
   function drawRacer(r){
-    if(r.wait>0||r.y<-3.26)return;
-    const kind=(pilotIndex+r.i)%heads.length, kit=heads[kind],suit=costumes[r.i];
+    if(r.left||r.wait>0||r.y<-3.26)return;
+    const kind=r.pilot ?? (pilotIndex+r.i)%heads.length, kit=heads[kind],suit=costumes[r.i];
     const time=mode==='dock'?dockTime:obstacleTime, speed=Math.hypot(r.vx,r.vz);
     const motion=clamp(speed/7,0,1), gait=r.ground?Math.sin(r.stride)*motion:0;
     const air=r.ground?0:1, tuck=air*clamp(.48+r.vy*.058,.13,1);
@@ -1954,7 +2251,7 @@ function run() {
     const dive=clamp(r.dive*8,0,1), idle=Math.sin(time*2.8+r.i);
     const bank=clamp((r.bank||0)*-.14+gait*.054+Math.sin(time*18+r.i)*stun*.28,-.5,.5);
     const pitch=-dive*1.21+stun*.65-motion*.105-.16*crouch;
-    const sc=r.i===0?1.15:1.08, yaw=r.a, co=Math.cos(yaw), si=Math.sin(yaw);
+    const sc=(online?r===player:r.i===0)?1.15:1.08, yaw=r.a, co=Math.cos(yaw), si=Math.sin(yaw);
     const bob=(1-Math.cos(r.stride*2))*.034*motion*(1-air)-.115*crouch+.014*idle*(1-motion);
     // Forward kinematics: each distal segment starts at its parent's rotated endpoint.
     function limb(model,x,y,z,bend=0,twist=0,roll=0,scaleY=1){
@@ -1994,7 +2291,7 @@ function run() {
       const x=s*.23,z=-.27;
       draw(ball,r.x+co*x+si*z,r.y+.45,r.z-si*x+co*z,.12,.28+Math.sin(time*28)*.06,.15,'mint',yaw,-.65,2);
     }
-    if(r.i===0&&mode!=='dock')draw(drum,r.x,r.y+2.45+idle*.042,r.z,.16,.065,.16,'lime',0,0,2);
+    if(r===player&&mode!=='dock')draw(drum,r.x,r.y+2.45+idle*.042,r.z,.16,.065,.16,'lime',0,0,2);
   }
   // Sliding obstacle: the crab shell rides on a toothed carriage. Fingers rotate on separate pivots.
   const machineShell=loft([[0,-.40,.03,.34,.29],[0,-.30,.04,.73,.41],[0,-.09,.02,.97,.51],
@@ -2207,7 +2504,7 @@ function run() {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
     gl.depthMask(false);
-    for(const r of lineup) if(r.wait<=0&&floor(r.x,r.z)) {
+    for(const r of lineup) if(!r.left&&r.wait<=0&&floor(r.x,r.z)) {
       const size=.88+Math.max(0,r.y)*.12;
       draw(drum,r.x,.033,r.z,1.12*size,.008,.88*size,'navy',0,0,2,.29/(1+Math.max(0,r.y)));
     }
@@ -2217,6 +2514,79 @@ function run() {
     for(const p of particles) draw(ball,p.x,p.y,p.z,p.trail?.15:.12,.12,p.trail?.5:.12,p.trail?'gold':'mint',0,0,2);
   }
 
+  function snapshot() {
+    return {mode, elapsed, countdown, obstacleTime, pads:springs.map(p=>p.firedAt),
+      racers:racers.map(r=>[...netFields.map(k=>Math.round((r[k]||0)*1000)/1000),Number(r.ground),
+        [...r.gates].reduce((mask,n)=>mask|(1<<n),0),Number(r.left)])};
+  }
+  function applySnapshot(s) {
+    if(!online || !['race','countdown'].includes(s?.mode) || ![s.elapsed,s.countdown,s.obstacleTime].every(Number.isFinite) ||
+        !Array.isArray(s.racers) || s.racers.length!==racers.length ||
+        !s.racers.every(row=>Array.isArray(row)&&row.length===netFields.length+3&&row.every(Number.isFinite)) ||
+        !Array.isArray(s.pads) || s.pads.length!==springs.length || !s.pads.every(Number.isFinite)) return;
+    if(mode!==s.mode) setMode(s.mode);
+    elapsed=s.elapsed; countdown=s.countdown; obstacleTime=s.obstacleTime;
+    if (online.stalled) { online.stalled=false; $('toast').hidden=true; }
+    online.age=0; updateObstacles(obstacleTime);
+    springs.forEach((p,i)=>p.firedAt=s.pads[i]);
+    const previous={gates:player.gates.size,cp:player.cp,falls:player.falls,dive:player.dive,flight:player.flight,ground:player.ground};
+    racers.forEach((r,i)=>{
+      const row=s.racers[i];
+      const target={x:row[0],y:row[1],z:row[2]};
+      if(!r.target || Math.hypot(r.x-target.x,r.z-target.z)>3) Object.assign(r,target);
+      r.target=target;
+      for(let n=3;n<netFields.length;n++) r[netFields[n]]=row[n];
+      r.cp=clamp(Math.trunc(r.cp),0,checkpoints.length-1);
+      r.ground=!!row[netFields.length]; r.left=!!row[netFields.length+2];
+      r.gates=new Set(gates.map((_,n)=>n).filter(n=>row[netFields.length+1] & (1<<n)));
+    });
+    if (mode==='race') {
+      playRaceBeat();
+      if(player.cp>previous.cp) {notify('Checkpoint alcançado');tone(523,.15,'triangle');}
+      else if(player.gates.size>previous.gates) {notify('Anel de turbo!');tone(540,.22,'sine',0,1.8);}
+      else if(player.falls>previous.falls) {notify('De volta ao checkpoint');tone(92,.26,'sine',0,.62);}
+      else if(player.flight>0 && !previous.flight) {notify('Impulso!');tone(240,.25,'triangle',0,2.7);}
+      else if(player.dive>0 && !previous.dive) tone(285,.17,'triangle',0,.57);
+      else if(previous.ground && !player.ground && player.vy>4) tone(320,.13,'triangle',0,1.65);
+    }
+    finishers=racers.filter(r=>r.result).sort((a,b)=>a.result-b.result);
+    const count=Math.ceil(countdown-.14);
+    $('count').hidden=mode!=='countdown' && elapsed>.72;
+    $('count').textContent=count>0?count:'VAI!';
+    if (mode==='countdown' && lastCount!==count) {lastCount=count;tone(count>0?370:735,.13,'triangle');}
+    updateHUD();
+  }
+  function clientStep(dt) {
+    if(notice>0 && (notice-=dt)<=0) $('toast').hidden=true;
+    online.age=(online.age||0)+dt;
+    if (online.age>5 && !online.stalled) {
+      online.stalled=true; notice=0;
+      $('toast').textContent='Aguardando o anfitrião retomar a corrida…'; $('toast').hidden=false;
+    }
+    if (online.age<.12 && mode==='race') {obstacleTime+=dt;updateObstacles(obstacleTime);}
+    for(const r of racers) if(r.target) {
+      const lead=mode==='race' && !r.result && !r.wait?Math.min(.07,online.age):0;
+      const alpha=1-Math.exp(-30*dt);
+      r.x=mix(r.x,r.target.x+r.vx*lead,alpha);
+      r.z=mix(r.z,r.target.z+r.vz*lead,alpha);
+      r.y=mix(r.y,r.target.y+r.vy*lead,alpha);
+    }
+  }
+  if (window.createTurboRoom) {
+    room=window.createTurboRoom({
+      pilot:()=>pilotIndex,
+      begin(session) {online=session; training=false;rankSignature='';lastNetSend=-100;startRace();},
+      apply:applySnapshot,
+      gone(seat) {const r=racers.find(r=>r.i===seat);if(r)r.left=true;},
+      reset() {
+        online=null;
+        if ($('race-exit').open) $('race-exit').close();
+        showMenu();
+      }
+    });
+    $('race-stay').addEventListener('click',()=>$('race-exit').close());
+    $('race-leave').addEventListener('click',()=>room.leave());
+  }
   // Menu cover and game graphics are embedded for offline play.
   freshRace();
   resize();
@@ -2239,6 +2609,15 @@ function run() {
     if(mode==='race' && (hudTimer+=dt)>.095) {
       updateHUD();
       hudTimer=0;
+    }
+    if (online && stamp-lastNetSend>=50) {
+      lastNetSend=stamp;
+      if(online.host) room.state(snapshot());
+      else {
+        const [x,z,j,d]=playerInput();
+        room.input([x,z,Number(j),Number(d)]);
+        jumpPressed=divePressed=0;
+      }
     }
     render(dt);
     requestAnimationFrame(frame);

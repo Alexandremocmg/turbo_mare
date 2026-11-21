@@ -2,16 +2,17 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-module.exports = function criarSimulador() {
+module.exports = function criarSimulador(createTurboRoom) {
   const objects = new Map();
   const gl = new Proxy({}, {
     get: (_, key) => /^[A-Z0-9_]+$/.test(key) ? 1 : () => 1
   });
   const document = {
     body: {dataset: {}},
+    createElement: () => ({getContext: () => null}),
     getElementById(id) {
       if (!objects.has(id)) {
-        objects.set(id, {getContext: () => gl, style: {}, addEventListener() {}, focus() {}});
+        objects.set(id, {getContext: () => gl, style: {}, previousElementSibling: {}, replaceChildren() {}, addEventListener() {}, focus() {}});
       }
       return objects.get(id);
     }
@@ -36,7 +37,7 @@ module.exports = function criarSimulador() {
   if (!frameStart.test(script)) throw new Error('O simulador não encontrou o início do loop principal.');
   let game;
   vm.runInNewContext(script.replace(frameStart, () => bridge + '\n}'), {
-    document, window: {addEventListener() {}}, matchMedia: () => ({matches: false}),
+    document, window: {addEventListener() {}, createTurboRoom}, matchMedia: () => ({matches: false}),
     innerWidth: 1365, innerHeight: 768, devicePixelRatio: 1,
     localStorage: {getItem: () => null, setItem() {}}, expose: api => { game = api; }
   });

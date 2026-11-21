@@ -13,7 +13,9 @@ function substitute(marker, contents) {
 }
 
 substitute('<link rel="stylesheet" href="game.css">', '<style>\n' + read('game.css') + '</style>');
-substitute('<script src="game.js"></script>', '<script>\n' + read('game.js') + '</script>');
+for (const file of ['rooms.js', 'game.js']) {
+  substitute('<script src="' + file + '"></script>', '<script>\n' + read(file) + '</script>');
+}
 substitute('<!-- PWA: head -->', [
   '<link rel="manifest" href="./manifest.webmanifest">',
   '<link rel="icon" type="image/png" sizes="192x192" href="./icons/piloto-192.png">',

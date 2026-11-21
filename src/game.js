@@ -719,6 +719,7 @@ function run() {
     const sheet=document.createElement('canvas');
     sheet.width=1024;sheet.height=Math.min(4096,gl.getParameter(gl.MAX_TEXTURE_SIZE));
     const ctx=sheet.getContext('2d',{alpha:false});
+    if (!ctx) return;
     const W=sheet.width,H=sheet.height;
     ctx.setTransform(W/28,0,0,H/136,W/2,0);
     const box=(x,z,w,l,c)=>{ctx.fillStyle=c;ctx.fillRect(x,136-z-l,w,l);};
@@ -906,7 +907,8 @@ function run() {
   const format = (time) => Math.floor(time/60)+':'+String(Math.floor(time%60)).padStart(2,'0');
   const timeResult = (time) => time.toFixed(2).replace('.',',')+' s';
 
-  let training=false, beatIndex=-1;
+  let training=false, beatIndex=-1, online=null, room=null, lastNetSend=0, rankSignature='';
+  const netFields=['x','y','z','vx','vy','vz','a','stride','bank','landing','hit','stun','dive','flight','boost','wait','cp','result','raceTime','falls'];
   function freshRace() {
     seed = 9137;
     const grid = [[0,4.5],[-3.8,5.7],[3.8,5.7],[-1.85,5.3],[1.85,5.35],
@@ -918,7 +920,14 @@ function run() {
       error:random(), nextJump:0,flight:0,boost:0,gates:new Set(),springLock:0
     }));
     if(training) racers=racers.slice(0,1);
-    player = racers[0];
+    if (online) {
+      racers = racers.filter(r=>online.members.some(m=>m.slot===r.i));
+      for(const r of racers) {
+        const m=online.members.find(m=>m.slot===r.i);
+        r.name=m.name; r.pilot=m.pilot; r.left=false; r.reaction=.2; r.bias=0;
+      }
+    }
+    player = online ? racers.find(r=>r.i===online.slot) : racers[0];
     beatIndex=-1;
     finishers = [];
     particles = [];
@@ -939,6 +948,7 @@ function run() {
     $('menu').hidden=next!=='menu';
     $('hud').hidden=next==='menu'||next==='dock';
     $('dock').hidden=next!=='dock';
+    $('room-ranks').hidden=!online || !['race','countdown'].includes(next);
     $('touch').hidden=next!=='race';
     $('pause').disabled=!['countdown','race'].includes(next);
     $('modal').hidden=!['paused','result'].includes(next);
@@ -960,6 +970,15 @@ function run() {
     $('play').focus();
   }
   function pauseRace() {
+    if (online) {
+      clearControls();
+      if ($('race-exit').open) $('race-exit').close();
+      else {
+        $('exit-info').textContent=online.host?'Sair encerra a sala para todos os pilotos.':'A corrida continuará para os outros pilotos.';
+        $('race-exit').showModal();
+      }
+      return;
+    }
     if (mode==='paused') {
       setMode(resumeMode);
       $('world').focus();
@@ -1053,8 +1072,13 @@ function run() {
   window.addEventListener('keydown',event=>{
     if(event.altKey||event.ctrlKey||event.metaKey) return;
     const key=event.code;
-    if(key==='Escape' && !event.repeat) {pauseRace();return;}
-    if(key==='KeyR' && mode==='race' && !event.repeat) {startRace();return;}
+    if(key==='Escape' && !event.repeat) {
+      if ($('room').open) return;
+      if (online) event.preventDefault();
+      pauseRace();return;
+    }
+    if ($('race-exit').open) return;
+    if(key==='KeyR' && !online && mode==='race' && !event.repeat) {startRace();return;}
     if(!['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowLeft','ArrowDown','ArrowRight','Space','ShiftLeft','ShiftRight'].includes(key)) return;
     if(!['race','countdown'].includes(mode)) return;
     event.preventDefault();
@@ -1063,7 +1087,7 @@ function run() {
     keys.add(key);
   });
   window.addEventListener('keyup',event=>keys.delete(event.code));
-  window.addEventListener('blur',()=>{clearControls();if(['countdown','race'].includes(mode)) pauseRace();});
+  window.addEventListener('blur',()=>{clearControls();if(!online && ['countdown','race'].includes(mode)) pauseRace();});
   function clearControls() {
     keys.clear();
     jumpPressed=divePressed=0;
@@ -1182,7 +1206,7 @@ function run() {
     }
   }
   function moveRacer(r,dt) {
-    if(r.result) return;
+    if(r.result || r.left) return;
     if(r.wait>0) {
       r.wait-=dt;
       if(r.wait<=0) respawn(r);
@@ -1204,18 +1228,19 @@ function run() {
     r.hit=Math.max(0,r.hit-dt);
     r.nextJump=Math.max(0,r.nextJump-dt);
     r.coyote=r.ground?.105:Math.max(0,r.coyote-dt);
-    let [x,z,jump,dive]=r===player?playerInput():botInput(r);
+    let [x,z,jump,dive]=r===player?playerInput():online?room.control(r.i,dt):botInput(r);
     const magnitude=Math.hypot(x,z);
     if(magnitude>1) {x/=magnitude;z/=magnitude;}
     if(r.flight>0){
       r.flight=Math.max(0,r.flight-dt);
-      if(r===player) r.vx=clamp(r.vx+x*dt*3,-7,7);
+      if(r===player || online) r.vx=clamp(r.vx+x*dt*3,-7,7);
     } else if(r.stun<=0) {
       if(jump && r.coyote>0 && r.dive<=0) {
         r.vy=9.35;
         r.ground=false;
         r.coyote=0;
         r.nextJump=.39;
+        if(online && r!==player) room.consume(r.i,'jump');
         if(r===player) {jumpPressed=0;tone(320,.13,'triangle',0,1.65);}
       }
       if(dive && r.dive<=0 && !r.dove && r.y>-.32) {
@@ -1229,10 +1254,11 @@ function run() {
         r.coyote=0;
         r.dive=.54;
         r.dove=true;
+        if(online && r!==player) room.consume(r.i,'dive');
         if(r===player) {divePressed=0;tone(285,.17,'triangle',0,.57);}
       }
       if(r.dive<=0) {
-        const speed=(r===player?8.7:r.speed)*(r.boost>0?1.53:1);
+        const speed=(online||r===player?8.7:r.speed)*(r.boost>0?1.53:1);
         const a=1-Math.exp(-dt*(r.ground?18:8));
         r.vx=mix(r.vx,x*speed,a);
         r.vz=mix(r.vz,z*speed,a);
@@ -1310,10 +1336,10 @@ function run() {
   function separateRacers() {
     for(let i=0;i<racers.length;i++) {
       const a=racers[i];
-      if(a.wait>0 || a.result || a.y<-.3) continue;
+      if(a.left || a.wait>0 || a.result || a.y<-.3) continue;
       for(let j=i+1;j<racers.length;j++) {
         const b=racers[j];
-        if(b.wait>0 || b.result || Math.abs(b.y-a.y)>.7) continue;
+        if(b.left || b.wait>0 || b.result || Math.abs(b.y-a.y)>.7) continue;
         const x=a.x-b.x,z=a.z-b.z,d=Math.hypot(x,z);
         if(d>=.72) continue;
         const push=(.72-d)*.44;
@@ -1332,7 +1358,7 @@ function run() {
     notice=1.55;
   }
   function updateHUD() {
-    const rank = player.result || 1 + racers.filter(r=>r!==player&&(r.result||progressOf(r)>progressOf(player)+.04)).length;
+    const rank = player.result || 1 + racers.filter(r=>!r.left && r!==player&&(r.result||progressOf(r)>progressOf(player)+.04)).length;
     document.body.dataset.turbo='off';
     const percent = Math.floor(clamp((progressOf(player)-4.5)/(COURSE_END-4.5),0,1)*100);
     $('place').textContent=training?'Treino':rank+'º';
@@ -1343,10 +1369,42 @@ function run() {
     $('percent').textContent=percent+'%';
     $('fill').style.width=percent+'%';
     $('time').textContent=training?format(elapsed):format(Math.ceil(Math.max(0,TIME_LIMIT-elapsed)));
+    if (online) {
+      $('slots').previousElementSibling.textContent='Chegada';
+      $('slots').textContent=finishers.length+' / '+racers.filter(r=>!r.left || r.result).length;
+      const labels=roomOrder().map((r,i)=>(i+1)+'º  '+r.name+(r===player?' (você)':'')+' · '+roomScore(r));
+      const signature=JSON.stringify(labels);
+      if(signature!==rankSignature) {
+        rankSignature=signature;
+        $('race-list').replaceChildren(...labels.map(label=>{const li=document.createElement('li');li.textContent=label;return li;}));
+      }
+      return;
+    }
+    if($('slots').previousElementSibling) $('slots').previousElementSibling.textContent='Vagas';
     $('slots').textContent=training?'Livre':Math.max(0,QUALIFY-finishers.length)+' / '+QUALIFY;
   }
+  function roomOrder() {
+    return racers.slice().sort((a,b)=>(a.result||999)-(b.result||999)||Number(a.left)-Number(b.left)||progressOf(b)-progressOf(a)||a.i-b.i);
+  }
+  function roomScore(r) {
+    if(r.result) return r.result+'º · '+timeResult(r.raceTime);
+    if(r.left) return 'Saiu';
+    return Math.floor(clamp((progressOf(r)-4.5)/(COURSE_END-4.5),0,1)*100)+'%';
+  }
   function progressOf(r) {return r.wait>0?checkpoints[r.cp]:r.z;}
+  function playRaceBeat() {
+    const beat=Math.floor(elapsed/.212);
+    if(beat!==beatIndex){
+      beatIndex=beat;
+      const notes=[146.83,0,220,0,174.61,196,0,130.81,146.83,0,261.63,220,0,196,174.61,0];
+      const note=notes[beat%notes.length];
+      if(note) tone(note,.11,'triangle',0,.985,.032);
+      if(beat%4===0) tone(104,.105,'sine',0,.40,.065);
+      if(beat%8===6) tone(741,.045,'triangle',0,.62,.024);
+    }
+  }
   function step(dt) {
+    if (online && !online.host) { clientStep(dt); return; }
     if(mode==='dock'){
       dockTime+=dt;
       obstacleTime+=dt*.6;
@@ -1374,15 +1432,7 @@ function run() {
       return;
     }
     elapsed+=dt;
-    const beat=Math.floor(elapsed/.212);
-    if(beat!==beatIndex){
-      beatIndex=beat;
-      const notes=[146.83,0,220,0,174.61,196,0,130.81,146.83,0,261.63,220,0,196,174.61,0];
-      const note=notes[beat%notes.length];
-      if(note) tone(note,.11,'triangle',0,.985,.032);
-      if(beat%4===0) tone(104,.105,'sine',0,.40,.065);
-      if(beat%8===6) tone(741,.045,'triangle',0,.62,.024);
-    }
+    playRaceBeat();
     obstacleTime+=dt;
     updateObstacles(obstacleTime);
     for(const r of racers) moveRacer(r,dt);
@@ -1391,7 +1441,11 @@ function run() {
       gapHint=true;
       notify(matchMedia('(pointer:coarse)').matches?'Pule para atravessar o vão':'Espaço para atravessar o vão');
     }
-    if(player.result||finishers.length>=QUALIFY||(!training && elapsed>=TIME_LIMIT)) {
+    if (online && (racers.every(r=>r.result||r.left) || racers.filter(r=>!r.left).length<2 || elapsed>=TIME_LIMIT)) {
+      room.finish(roomOrder().map(r=>({name:r.name,slot:r.i,score:roomScore(r)})));
+      return;
+    }
+    if(!online && (player.result||finishers.length>=QUALIFY||(!training && elapsed>=TIME_LIMIT))) {
       updateHUD();
       finishRace(player.result>0 && player.result<=QUALIFY);
       return;
@@ -1691,8 +1745,8 @@ function run() {
   }
 
   function drawRacer(r){
-    if(r.wait>0||r.y<-3.26)return;
-    const kind=(pilotIndex+r.i)%heads.length, kit=heads[kind],suit=costumes[r.i];
+    if(r.left||r.wait>0||r.y<-3.26)return;
+    const kind=r.pilot ?? (pilotIndex+r.i)%heads.length, kit=heads[kind],suit=costumes[r.i];
     const time=mode==='dock'?dockTime:obstacleTime, speed=Math.hypot(r.vx,r.vz);
     const motion=clamp(speed/7,0,1), gait=r.ground?Math.sin(r.stride)*motion:0;
     const air=r.ground?0:1, tuck=air*clamp(.48+r.vy*.058,.13,1);
@@ -1700,7 +1754,7 @@ function run() {
     const dive=clamp(r.dive*8,0,1), idle=Math.sin(time*2.8+r.i);
     const bank=clamp((r.bank||0)*-.14+gait*.054+Math.sin(time*18+r.i)*stun*.28,-.5,.5);
     const pitch=-dive*1.21+stun*.65-motion*.105-.16*crouch;
-    const sc=r.i===0?1.15:1.08, yaw=r.a, co=Math.cos(yaw), si=Math.sin(yaw);
+    const sc=(online?r===player:r.i===0)?1.15:1.08, yaw=r.a, co=Math.cos(yaw), si=Math.sin(yaw);
     const bob=(1-Math.cos(r.stride*2))*.034*motion*(1-air)-.115*crouch+.014*idle*(1-motion);
     // Forward kinematics: each distal segment starts at its parent's rotated endpoint.
     function limb(model,x,y,z,bend=0,twist=0,roll=0,scaleY=1){
@@ -1740,7 +1794,7 @@ function run() {
       const x=s*.23,z=-.27;
       draw(ball,r.x+co*x+si*z,r.y+.45,r.z-si*x+co*z,.12,.28+Math.sin(time*28)*.06,.15,'mint',yaw,-.65,2);
     }
-    if(r.i===0&&mode!=='dock')draw(drum,r.x,r.y+2.45+idle*.042,r.z,.16,.065,.16,'lime',0,0,2);
+    if(r===player&&mode!=='dock')draw(drum,r.x,r.y+2.45+idle*.042,r.z,.16,.065,.16,'lime',0,0,2);
   }
   // Sliding obstacle: the crab shell rides on a toothed carriage. Fingers rotate on separate pivots.
   const machineShell=loft([[0,-.40,.03,.34,.29],[0,-.30,.04,.73,.41],[0,-.09,.02,.97,.51],
@@ -1953,7 +2007,7 @@ function run() {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
     gl.depthMask(false);
-    for(const r of lineup) if(r.wait<=0&&floor(r.x,r.z)) {
+    for(const r of lineup) if(!r.left&&r.wait<=0&&floor(r.x,r.z)) {
       const size=.88+Math.max(0,r.y)*.12;
       draw(drum,r.x,.033,r.z,1.12*size,.008,.88*size,'navy',0,0,2,.29/(1+Math.max(0,r.y)));
     }
@@ -1963,6 +2017,79 @@ function run() {
     for(const p of particles) draw(ball,p.x,p.y,p.z,p.trail?.15:.12,.12,p.trail?.5:.12,p.trail?'gold':'mint',0,0,2);
   }
 
+  function snapshot() {
+    return {mode, elapsed, countdown, obstacleTime, pads:springs.map(p=>p.firedAt),
+      racers:racers.map(r=>[...netFields.map(k=>Math.round((r[k]||0)*1000)/1000),Number(r.ground),
+        [...r.gates].reduce((mask,n)=>mask|(1<<n),0),Number(r.left)])};
+  }
+  function applySnapshot(s) {
+    if(!online || !['race','countdown'].includes(s?.mode) || ![s.elapsed,s.countdown,s.obstacleTime].every(Number.isFinite) ||
+        !Array.isArray(s.racers) || s.racers.length!==racers.length ||
+        !s.racers.every(row=>Array.isArray(row)&&row.length===netFields.length+3&&row.every(Number.isFinite)) ||
+        !Array.isArray(s.pads) || s.pads.length!==springs.length || !s.pads.every(Number.isFinite)) return;
+    if(mode!==s.mode) setMode(s.mode);
+    elapsed=s.elapsed; countdown=s.countdown; obstacleTime=s.obstacleTime;
+    if (online.stalled) { online.stalled=false; $('toast').hidden=true; }
+    online.age=0; updateObstacles(obstacleTime);
+    springs.forEach((p,i)=>p.firedAt=s.pads[i]);
+    const previous={gates:player.gates.size,cp:player.cp,falls:player.falls,dive:player.dive,flight:player.flight,ground:player.ground};
+    racers.forEach((r,i)=>{
+      const row=s.racers[i];
+      const target={x:row[0],y:row[1],z:row[2]};
+      if(!r.target || Math.hypot(r.x-target.x,r.z-target.z)>3) Object.assign(r,target);
+      r.target=target;
+      for(let n=3;n<netFields.length;n++) r[netFields[n]]=row[n];
+      r.cp=clamp(Math.trunc(r.cp),0,checkpoints.length-1);
+      r.ground=!!row[netFields.length]; r.left=!!row[netFields.length+2];
+      r.gates=new Set(gates.map((_,n)=>n).filter(n=>row[netFields.length+1] & (1<<n)));
+    });
+    if (mode==='race') {
+      playRaceBeat();
+      if(player.cp>previous.cp) {notify('Checkpoint alcançado');tone(523,.15,'triangle');}
+      else if(player.gates.size>previous.gates) {notify('Anel de turbo!');tone(540,.22,'sine',0,1.8);}
+      else if(player.falls>previous.falls) {notify('De volta ao checkpoint');tone(92,.26,'sine',0,.62);}
+      else if(player.flight>0 && !previous.flight) {notify('Impulso!');tone(240,.25,'triangle',0,2.7);}
+      else if(player.dive>0 && !previous.dive) tone(285,.17,'triangle',0,.57);
+      else if(previous.ground && !player.ground && player.vy>4) tone(320,.13,'triangle',0,1.65);
+    }
+    finishers=racers.filter(r=>r.result).sort((a,b)=>a.result-b.result);
+    const count=Math.ceil(countdown-.14);
+    $('count').hidden=mode!=='countdown' && elapsed>.72;
+    $('count').textContent=count>0?count:'VAI!';
+    if (mode==='countdown' && lastCount!==count) {lastCount=count;tone(count>0?370:735,.13,'triangle');}
+    updateHUD();
+  }
+  function clientStep(dt) {
+    if(notice>0 && (notice-=dt)<=0) $('toast').hidden=true;
+    online.age=(online.age||0)+dt;
+    if (online.age>5 && !online.stalled) {
+      online.stalled=true; notice=0;
+      $('toast').textContent='Aguardando o anfitrião retomar a corrida…'; $('toast').hidden=false;
+    }
+    if (online.age<.12 && mode==='race') {obstacleTime+=dt;updateObstacles(obstacleTime);}
+    for(const r of racers) if(r.target) {
+      const lead=mode==='race' && !r.result && !r.wait?Math.min(.07,online.age):0;
+      const alpha=1-Math.exp(-30*dt);
+      r.x=mix(r.x,r.target.x+r.vx*lead,alpha);
+      r.z=mix(r.z,r.target.z+r.vz*lead,alpha);
+      r.y=mix(r.y,r.target.y+r.vy*lead,alpha);
+    }
+  }
+  if (window.createTurboRoom) {
+    room=window.createTurboRoom({
+      pilot:()=>pilotIndex,
+      begin(session) {online=session; training=false;rankSignature='';lastNetSend=-100;startRace();},
+      apply:applySnapshot,
+      gone(seat) {const r=racers.find(r=>r.i===seat);if(r)r.left=true;},
+      reset() {
+        online=null;
+        if ($('race-exit').open) $('race-exit').close();
+        showMenu();
+      }
+    });
+    $('race-stay').addEventListener('click',()=>$('race-exit').close());
+    $('race-leave').addEventListener('click',()=>room.leave());
+  }
   // Menu cover and game graphics are embedded for offline play.
   freshRace();
   resize();
@@ -1985,6 +2112,15 @@ function run() {
     if(mode==='race' && (hudTimer+=dt)>.095) {
       updateHUD();
       hudTimer=0;
+    }
+    if (online && stamp-lastNetSend>=50) {
+      lastNetSend=stamp;
+      if(online.host) room.state(snapshot());
+      else {
+        const [x,z,j,d]=playerInput();
+        room.input([x,z,Number(j),Number(d)]);
+        jumpPressed=divePressed=0;
+      }
     }
     render(dt);
     requestAnimationFrame(frame);

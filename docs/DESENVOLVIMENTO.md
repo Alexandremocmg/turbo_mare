@@ -30,6 +30,18 @@ A pista avança no eixo **Z**, o movimento lateral usa **X** e a altura usa **Y*
 
 Recorde, som, qualidade gráfica e piloto escolhido são preferências locais do navegador. A corrida funciona em uma única aba.
 
+## Salas online
+
+`src/rooms.js` cria um canal com identificador aleatório de 128 bits no relay WSS. O convite contém o canal e o identificador que o relay atribuiu ao anfitrião. A conexão só é aberta quando a pessoa cria ou entra em uma sala. O relay transporta os apelidos, comandos, posições e eventos da partida. O site e o PWA continuam hospedados no GitHub Pages. [Serviço Itty Sockets](https://ittysockets.com/docs/getting-started)
+
+A simulação de `src/game.js` roda no navegador do anfitrião. Os convidados enviam direção, salto e mergulho. O anfitrião calcula impactos, checkpoints e chegadas, e transmite o estado até 20 vezes por segundo. Os convidados interpolam as posições para a câmera e as animações. Cada conexão controla apenas o piloto atribuído a ela. O host precisa manter o jogo em primeiro plano, especialmente no celular.
+
+O teste abaixo usa dois perfis isolados do Chrome e um convite novo no relay real. Ele verifica que cada jogador vê o outro avançar, que o convidado pode sair e voltar à sala para a revanche e que a saída do anfitrião encerra a sessão. Para testar localmente, sirva a raiz por HTTP e substitua a URL por `http://localhost:8000/`.
+
+```sh
+node tests/salas.cjs https://alexandremocmg.github.io/turbo_mare/
+```
+
 ## Validação
 
 ### Aplicativo instalável e GitHub Pages

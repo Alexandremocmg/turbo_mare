@@ -15,12 +15,25 @@
     <div class="eyebrow">Circuito do Kraken</div>
     <h1>TURBO<span>MARÉ</span></h1>
     <p>Pegue os anéis de turbo e escape dos tentáculos para chegar entre os seis primeiros.</p>
-    <div class="menu-buttons"><button class="primary" id="play">Disputar corrida <span aria-hidden="true">▶</span></button><button id="practice">Treino livre</button><button id="crew-open">Pilotos</button></div>
+    <div class="menu-buttons"><button class="primary" id="play">Disputar corrida <span aria-hidden="true">▶</span></button><button id="friends">Jogar com amigos</button><button id="practice">Treino livre</button><button id="crew-open">Pilotos</button></div>
     <div class="menu-foot"><span><kbd>WASD</kbd> ou setas</span><span><kbd>Espaço</kbd> Pular</span><span><kbd>Shift</kbd> Mergulhar</span></div>
     <div class="app-tools"><button type="button" id="install-game" aria-controls="install-help" hidden>Instalar jogo</button><span id="offline-state" role="status" hidden>Pronto para jogar offline</span></div>
     <div id="install-help" hidden>No Safari, toque em Compartilhar e depois em Adicionar à Tela de Início.</div>
   </div>
 </main>
+<dialog id="room" aria-labelledby="room-title">
+  <form id="room-form">
+    <div class="eyebrow">Circuito do Kraken</div>
+    <h2 id="room-title">Jogar com amigos</h2>
+    <p id="room-status" role="status"></p>
+    <label id="room-nick-label" for="room-nick">Seu apelido<input id="room-nick" maxlength="18" placeholder="Piloto" autocomplete="nickname"></label>
+    <button id="room-enter" type="submit" class="primary">Criar sala</button>
+  </form>
+  <div id="room-invite" hidden><label for="room-url">Link do convite</label><div class="invite-row"><input id="room-url" readonly><button id="room-copy" type="button">Copiar link</button></div></div>
+  <ol id="room-list"></ol>
+  <div class="room-actions"><button id="room-start" class="primary" hidden>Largar</button><button id="room-leave">Voltar</button></div>
+</dialog>
+<dialog id="race-exit" aria-labelledby="exit-title"><h2 id="exit-title">Sair da corrida?</h2><p id="exit-info"></p><div class="room-actions"><button id="race-stay" class="primary">Continuar</button><button id="race-leave">Sair da sala</button></div></dialog>
 <section id="dock" aria-label="Escolha do piloto" hidden>
   <button id="crew-back" class="secondary">‹ Menu</button>
   <div class="crew-card">
@@ -40,6 +53,7 @@
     </div>
   </div>
   <div id="stage"><span id="sector">Píer de largada</span> <b id="ring-score">◎ 0/4</b></div>
+  <details id="room-ranks" hidden><summary>Classificação</summary><ol id="race-list"></ol></details>
   <div id="count" hidden></div><div id="toast" role="status" hidden></div>
 </div>
 <div id="settings"><button class="icon" id="sound" aria-label="Desativar som" title="Desativar som">♫</button></div>
@@ -64,6 +78,7 @@
 <p class="card" id="error" hidden></p>
 <img id="bay-art" hidden alt="" src="art/baia.png">
 <!-- PWA: install -->
+<script src="rooms.js"></script>
 <script src="game.js"></script>
 </body>
 </html>
