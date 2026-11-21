@@ -293,6 +293,21 @@ body[data-turbo="on"] #hud::before{opacity:1}
   });
 
   if ('serviceWorker' in navigator) {
+    // A versão nova assume assim que termina de baixar. A página recarrega no menu,
+    // nunca no meio de uma corrida ou com a sala online aberta.
+    const updating = !!navigator.serviceWorker.controller;
+    let waiting = false;
+    const reloadWhenIdle = () => {
+      const idle = ['menu', 'dock'].includes(document.body.dataset.mode) && !document.querySelector('dialog[open]');
+      waiting = !idle;
+      if (idle) location.reload();
+    };
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (updating) reloadWhenIdle(); });
+    new MutationObserver(() => { if (waiting) reloadWhenIdle(); })
+      .observe(document.body, {attributes: true, attributeFilter: ['data-mode']});
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') navigator.serviceWorker.getRegistration().then(r => r?.update()).catch(() => {});
+    });
     navigator.serviceWorker.register('./sw.js', {updateViaCache: 'none'})
       .then(() => navigator.serviceWorker.ready)
       .then(() => { status.hidden = false; })
