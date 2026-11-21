@@ -1,13 +1,13 @@
 const scope = self.registration.scope;
 const prefix = 'turbo-mare:' + scope + ':';
-const cacheName = prefix + 'df4626490e2f45a2867d';
+const cacheName = prefix + '25f603c12f75699097cb';
 const shell = new URL('index.html', scope).href;
 const assets = ["index.html","manifest.webmanifest","icons/piloto-192.png","icons/piloto-512.png","icons/piloto-maskable.png","icons/apple-touch-icon.png"].map(file => new URL(file, scope).href);
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(cacheName).then(cache =>
     cache.addAll(assets.map(url => new Request(url, {cache: 'reload'})))
-  ));
+  ).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', event => {
