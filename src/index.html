@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#102a3a">
+<title>Turbo Maré | Corrida 3D</title>
+<link rel="stylesheet" href="game.css">
+</head>
+<body data-mode="menu">
+<div id="scene"><canvas id="world" aria-label="Pista de corrida em 3D"></canvas></div>
+<main id="menu"><img id="cover-art" alt="" src="art/capa.png">
+  <div class="menu-inner">
+    <div class="eyebrow">Circuito do Kraken</div>
+    <h1>TURBO<span>MARÉ</span></h1>
+    <p>Pegue os anéis de turbo e escape dos tentáculos para chegar entre os seis primeiros.</p>
+    <div class="menu-buttons"><button class="primary" id="play">Disputar corrida <span aria-hidden="true">▶</span></button><button id="practice">Treino livre</button><button id="crew-open">Pilotos</button></div>
+    <div class="menu-foot"><span><kbd>WASD</kbd> ou setas</span><span><kbd>Espaço</kbd> Pular</span><span><kbd>Shift</kbd> Mergulhar</span></div>
+  </div>
+</main>
+<section id="dock" aria-label="Escolha do piloto" hidden>
+  <button id="crew-back" class="secondary">‹ Menu</button>
+  <div class="crew-card">
+    <div class="crew-choose"><button id="crew-prev" aria-label="Piloto anterior">‹</button><h2 id="crew-name">Lontra</h2><button id="crew-next" aria-label="Próximo piloto">›</button></div>
+    <label for="crew-motion">Animação <select id="crew-motion"><option value="idle">Em repouso</option><option value="run">Corrida</option><option value="jump">Salto</option><option value="dive">Mergulho</option></select></label>
+    <button class="primary" id="crew-use">Usar piloto <span aria-hidden="true">✓</span></button>
+  </div>
+</section>
+<div id="hud" hidden>
+  <div class="hud-top">
+    <div class="hud-box"><small>Posição</small><strong id="place">1º</strong><span id="field-size">/ 10</span></div>
+    <div class="hud-box track-hud"><small><span id="progress-name">Circuito do Kraken</span><span id="percent">0%</span></small><div class="rail"><span id="fill"></span><i style="left:27%"></i><i style="left:63%"></i></div></div>
+    <div class="right-hud">
+      <div class="hud-box"><small>Tempo</small><strong id="time">1:30</strong></div>
+      <div class="hud-box"><small>Vagas</small><strong id="slots">6 / 6</strong></div>
+      <button class="icon" id="pause" aria-label="Pausar" title="Pausar (Esc)">Ⅱ</button>
+    </div>
+  </div>
+  <div id="stage"><span id="sector">Píer de largada</span> <b id="ring-score">◎ 0/4</b></div>
+  <div id="count" hidden></div><div id="toast" role="status" hidden></div>
+</div>
+<div id="settings"><button class="icon" id="sound" aria-label="Desativar som" title="Desativar som">♫</button></div>
+<div id="touch" hidden>
+  <div id="stick" aria-label="Controle de direção"><div id="nub"></div></div>
+  <div id="actions"><button id="dive"><span aria-hidden="true">»</span>Mergulho</button><button id="jump"><span aria-hidden="true">↑</span>Pulo</button></div>
+</div>
+<div id="celebrate" aria-hidden="true"></div>
+<section id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
+  <div class="card">
+    <div class="eyebrow" id="modal-tag">Circuito do Kraken</div>
+    <h2 id="modal-title"></h2>
+    <p id="modal-text"></p>
+    <label id="quality-row" for="quality">Detalhe gráfico <select id="quality"><option value="auto">Automático</option><option value="high">Alto</option><option value="light">Leve</option></select></label>
+    <div class="card-actions">
+      <button class="primary" id="modal-main"></button>
+      <button class="secondary" id="modal-restart">Reiniciar</button>
+      <button class="secondary" id="modal-menu">Menu</button>
+    </div>
+  </div>
+</section>
+<p class="card" id="error" hidden></p>
+<img id="bay-art" hidden alt="" src="art/baia.png">
+<script src="game.js"></script>
+</body>
+</html>
+

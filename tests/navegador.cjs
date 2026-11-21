@@ -1,0 +1,141 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const {spawn} = require('node:child_process');
+const {once} = require('node:events');
+const {pathToFileURL} = require('node:url');
+const {setTimeout: sleep} = require('node:timers/promises');
+
+const root = path.resolve(__dirname, '..');
+const output = path.join(root, 'artifacts');
+const localBins = process.platform === 'win32'
+  ? [process.env.ProgramFiles, process.env.LOCALAPPDATA, process.env['ProgramFiles(x86)']]
+      .filter(Boolean).map(dir => path.join(dir, 'Google/Chrome/Application/chrome.exe'))
+  : ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome',
+     '/usr/bin/chromium', '/usr/bin/chromium-browser'];
+const executable = process.env.CHROME_PATH || localBins.find(p => fs.existsSync(p));
+if (!executable) throw new Error('Defina CHROME_PATH com o caminho do executável do Chrome ou Chromium.');
+fs.mkdirSync(output, {recursive: true});
+const profile = fs.mkdtempSync(path.join(output, 'perfil-'));
+const chrome = spawn(executable, [
+  '--headless=new', '--no-first-run', '--disable-background-networking', '--disable-extensions',
+  '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0',
+  '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--window-size=1365,768',
+  '--user-data-dir=' + profile, 'about:blank'
+], {windowsHide: true, stdio: ['ignore', 'ignore', 'pipe']});
+const exited = once(chrome, 'close').catch(() => {});
+let socket;
+
+async function main() {
+  const file = path.join(profile, 'DevToolsActivePort');
+  let port;
+  for (let i = 0; i < 150 && !port; i++) {
+    if (chrome.exitCode !== null) throw new Error('Chrome encerrou durante a inicialização.');
+    if (fs.existsSync(file)) port = Number(fs.readFileSync(file, 'utf8').split('\n')[0]);
+    if (!port) await sleep(200);
+  }
+  if (!port) throw new Error('Tempo limite ao abrir o navegador de teste.');
+  const tabs = await fetch('http://127.0.0.1:' + port + '/json/list').then(r => r.json());
+  socket = new WebSocket(tabs.find(tab => tab.type === 'page').webSocketDebuggerUrl);
+  await once(socket, 'open');
+  const errors = [], pending = new Map();
+  let sequence = 0;
+  socket.onmessage = event => {
+    const msg = JSON.parse(event.data);
+    if (pending.has(msg.id)) {
+      const {resolve, reject} = pending.get(msg.id);
+      pending.delete(msg.id);
+      if (msg.error) reject(new Error(msg.error.message));
+      else resolve(msg.result);
+    }
+    if (msg.method === 'Runtime.exceptionThrown') errors.push(msg.params.exceptionDetails);
+  };
+  socket.onclose = () => {
+    for (const {reject} of pending.values()) reject(new Error('Conexão com Chrome encerrada.'));
+    pending.clear();
+  };
+  function send(method, params = {}) {
+    return new Promise((resolve, reject) => {
+      const id = ++sequence;
+      pending.set(id, {resolve, reject});
+      socket.send(JSON.stringify({id, method, params}));
+    });
+  }
+  async function evaluate(expression) {
+    const r = await send('Runtime.evaluate', {expression, returnByValue: true});
+    if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails));
+    return r.result.value;
+  }
+  async function until(expression) {
+    const deadline = Date.now() + 90000;
+    do {
+      if (await evaluate(expression)) return;
+      await sleep(160);
+    } while (Date.now() < deadline);
+    throw new Error('Tempo limite: ' + expression);
+  }
+  const click = id => evaluate('document.getElementById(' + JSON.stringify(id) + ').click()');
+  async function screenshot(name) {
+    const {data} = await send('Page.captureScreenshot', {format:'png', captureBeyondViewport:false});
+    fs.writeFileSync(path.join(output, name + '.png'), Buffer.from(data, 'base64'));
+  }
+  const key = (type, code, key, keyCode) => send('Input.dispatchKeyEvent', {type, code, key, windowsVirtualKeyCode:keyCode});
+  const moving = "parseInt(document.getElementById('percent').textContent) >= 6";
+  const racing = "document.body.dataset.mode === 'race'";
+
+  await send('Runtime.enable');
+  await send('Page.enable');
+  await send('Emulation.setDeviceMetricsOverride', {width:1365, height:768, deviceScaleFactor:1, mobile:false});
+  await send('Page.navigate', {url:pathToFileURL(path.join(root,'index.html')).href});
+  await until("document.getElementById('cover-art')?.naturalWidth > 0 && document.getElementById('bay-art')?.naturalWidth > 0 && !!document.querySelector('canvas').getContext('webgl')");
+  await screenshot('menu');
+  await click('crew-open');
+  const crew = [['Lontra','lontra','idle'],['Tubarão','tubarao','run'],['Axolote','axolote','jump'],['Marujo','marujo','dive']];
+  for (const [name, filename, pose] of crew) {
+    await until("document.getElementById('crew-name').textContent === " + JSON.stringify(name));
+    await evaluate("document.getElementById('crew-motion').value = " + JSON.stringify(pose));
+    await sleep(600);
+    await screenshot(filename);
+    await click('crew-next');
+  }
+  await click('crew-use');
+  assert.equal(await evaluate("localStorage.getItem('mare-pilot')"), '0');
+  await click('play');
+  await until(racing);
+  await key('keyDown','KeyW','w',87);
+  await until(moving);
+  await key('keyUp','KeyW','w',87);
+  await key('keyDown','Escape','Escape',27);
+  await key('keyUp','Escape','Escape',27);
+  await until("document.body.dataset.mode === 'paused'");
+  await evaluate("const quality = document.getElementById('quality'); quality.value='high'; quality.dispatchEvent(new Event('change'))");
+  await click('modal-main');
+  await until(racing + " && document.querySelector('canvas').width === 1365");
+  await screenshot('corrida');
+  await click('pause');
+  await click('modal-menu');
+  await send('Emulation.setDeviceMetricsOverride', {width:390, height:844, deviceScaleFactor:1, mobile:true});
+  await send('Emulation.setTouchEmulationEnabled', {enabled:true, maxTouchPoints:3});
+  await click('play');
+  await until(racing + " && document.getElementById('stick').getBoundingClientRect().width > 0");
+  const point = await evaluate("(()=>{const r = document.getElementById('stick').getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2-36};})()");
+  await send('Input.dispatchTouchEvent', {type:'touchStart',touchPoints:[point]});
+  await until(moving);
+  await send('Input.dispatchTouchEvent', {type:'touchEnd',touchPoints:[]});
+  await screenshot('celular');
+  assert.equal(await evaluate("document.querySelector('canvas').getContext('webgl').getError()"), 0);
+  assert.deepEqual(errors, []);
+  console.log('Verificados quatro pilotos, corrida, teclado, pausa, retomada, toque emulado e renderização WebGL. Capturas em artifacts/.');
+}
+
+const deadline = setTimeout(() => chrome.kill(), 8 * 60 * 1000);
+chrome.stderr.resume();
+main().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => {
+  clearTimeout(deadline);
+  socket?.close();
+  chrome.kill();
+  await exited;
+  if (path.dirname(profile) === output && path.basename(profile).startsWith('perfil-')) {
+    fs.rmSync(profile, {recursive:true, force:true, maxRetries:6, retryDelay:250});
+  }
+});
