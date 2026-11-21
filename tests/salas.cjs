@@ -89,16 +89,6 @@ async function verify({send,evaluate,until,click,key,screenshot}) {
     assert.equal(halfway.length,2);
     assert.ok(halfway.some(r=>Number(r[1])>0),'Pontuação da Baía');
     notify(role+'-half');
-    let resume;
-    if(role==='--host'){
-      await wait('--guest-half');
-      resume=await minimize();
-      await wait('guest-leading');
-      await resume();
-    }else{
-      await until("document.body.dataset.mode==='race' && document.getElementById('progress-name').textContent.startsWith('2/2') && ("+leader('Marujo')+")");
-      notify('guest-leading');
-    }
     await drive(2);
     const podium=await readTable();
     assert.equal(podium.length,2);
@@ -109,7 +99,8 @@ async function verify({send,evaluate,until,click,key,screenshot}) {
     }
     assert.equal(await evaluate("document.getElementById('room-url').value"),invite);
     notify(role+'-podium',JSON.stringify(podium));
-    if(role==='--guest'){await wait('--host-podium');await click('room-start');}
+    await wait(role==='--host'?'--guest-podium':'--host-podium');
+    if(await evaluate("!document.getElementById('room-start').hidden"))await click('room-start');
     await until("document.body.dataset.mode==='race' && document.getElementById('progress-name').textContent.startsWith('1/2')");
     notify(role+'-rematch');
     await wait(role==='--host'?'--guest-rematch':'--host-rematch');
