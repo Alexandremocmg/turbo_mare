@@ -12,6 +12,7 @@ Para instalar, abra o link no Chrome ou Edge e use **Instalar jogo** quando apar
 
 [Baixe o jogo em um único arquivo HTML](https://raw.githubusercontent.com/Alexandremocmg/turbo_mare/main/index.html). Se o navegador exibir o código, salve a página como `index.html` e abra o arquivo baixado. Você também pode clonar o repositório e abrir o `index.html` da raiz. A arte e o áudio funcionam offline em um navegador com WebGL.
 
+- **Partida rápida** procura quem está online agora, sem convite. Quando há pelo menos dois pilotos procurando, o jogo espera alguns segundos por mais gente (até seis) e larga sozinho. Quatro bots completam o grid. Se ninguém aparecer, **Correr com bots** abre uma corrida normal.
 - **Jogar com amigos** abre uma sala online para 2 a 6 pessoas. Digite seu apelido, clique em **Criar sala** e envie o **link do convite**. Cada amigo abre o link e escolhe **Entrar na sala**. O anfitrião dá a largada quando todos estiverem conectados. Se ele minimizar o jogo ou sair, outro piloto assume a mesma corrida. Até o último piloto pode terminar sozinho. O convite continua válido para a revanche enquanto a sala estiver aberta.
 - **Disputar corrida** coloca você no grid com mais nove pilotos. Os quatro anéis dão impulso e os checkpoints encurtam o retorno após uma queda.
 - **Treino livre** abre a pista para uma volta solo, sem limite de tempo.

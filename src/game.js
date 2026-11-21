@@ -1016,6 +1016,7 @@ function run() {
   const timeResult = (time) => time.toFixed(2).replace('.',',')+' s';
 
   let training=false, beatIndex=-1, online=null, room=null, lastNetSend=0, rankSignature='';
+  const botNames=['Bot Coral','Bot Recife','Bot Âncora','Bot Farol'];
   const netFields=['x','y','z','vx','vy','vz','a','stride','bank','landing','hit','stun','dive','flight','boost','wait','cp','result','raceTime','falls'];
   function freshRace() {
     selectTrack(online?.track==='estaleiro');
@@ -1033,10 +1034,13 @@ function run() {
     }));
     if(training) racers=racers.slice(0,1);
     if (online) {
-      racers = racers.filter(r=>online.members.some(m=>m.slot===r.i));
+      // Na partida rápida, os lugares 7 a 10 do grid são bots simulados pelo anfitrião.
+      racers = racers.filter(r=>online.members.some(m=>m.slot===r.i) || (online.bots && r.i>=6));
       for(const r of racers) {
         const m=online.members.find(m=>m.slot===r.i);
-        r.name=m.name; r.pilot=m.pilot; r.left=false; r.reaction=.2; r.bias=0;
+        r.left=false;
+        if(!m) {r.bot=true; r.name=botNames[r.i-6]; r.pilot=r.i%4; continue;}
+        r.name=m.name; r.pilot=m.pilot; r.reaction=.2; r.bias=0;
       }
     }
     player = online ? racers.find(r=>r.i===online.slot) : racers[0];
@@ -1389,19 +1393,19 @@ function run() {
     r.hit=Math.max(0,r.hit-dt);
     r.nextJump=Math.max(0,r.nextJump-dt);
     r.coyote=r.ground?.105:Math.max(0,r.coyote-dt);
-    let [x,z,jump,dive]=r===player?playerInput():online?room.control(r.i,dt):botInput(r);
+    let [x,z,jump,dive]=r===player?playerInput():online&&!r.bot?room.control(r.i,dt):botInput(r);
     const magnitude=Math.hypot(x,z);
     if(magnitude>1) {x/=magnitude;z/=magnitude;}
     if(r.flight>0){
       r.flight=Math.max(0,r.flight-dt);
-      if(r===player || online) r.vx=clamp(r.vx+x*dt*3,-7,7);
+      if(r===player || (online && !r.bot)) r.vx=clamp(r.vx+x*dt*3,-7,7);
     } else if(r.stun<=0) {
       if(jump && r.coyote>0 && r.dive<=0) {
         r.vy=9.35;
         r.ground=false;
         r.coyote=0;
         r.nextJump=.39;
-        if(online && r!==player) room.consume(r.i,'jump');
+        if(online && r!==player && !r.bot) room.consume(r.i,'jump');
         if(r===player) {jumpPressed=0;tone(320,.13,'triangle',0,1.65);}
       }
       if(dive && r.dive<=0 && !r.dove && r.y>-.32) {
@@ -1415,11 +1419,11 @@ function run() {
         r.coyote=0;
         r.dive=.54;
         r.dove=true;
-        if(online && r!==player) room.consume(r.i,'dive');
+        if(online && r!==player && !r.bot) room.consume(r.i,'dive');
         if(r===player) {divePressed=0;tone(285,.17,'triangle',0,.57);}
       }
       if(r.dive<=0) {
-        const speed=(online||r===player?8.7:r.speed)*(r.boost>0?1.53:1);
+        const speed=(r.bot||(!online&&r!==player)?r.speed:8.7)*(r.boost>0?1.53:1);
         const a=1-Math.exp(-dt*(r.ground?18:8));
         r.vx=mix(r.vx,x*speed,a);
         r.vz=mix(r.vz,z*speed,a);
@@ -1606,7 +1610,7 @@ function run() {
       gapHint=true;
       notify(matchMedia('(pointer:coarse)').matches?'Pule para atravessar o vão':'Espaço para atravessar o vão');
     }
-    if (online && (racers.every(r=>r.result||r.left) || elapsed>=TIME_LIMIT)) {
+    if (online && (racers.every(r=>r.result||r.left||r.bot) || elapsed>=TIME_LIMIT)) {
       room.finish(roomOrder().map(r=>({name:r.name,slot:r.i,score:roomScore(r),eligible:!!r.result||(!r.left&&r.cp>0)})));
       return;
     }
