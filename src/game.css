@@ -5,6 +5,12 @@ body{touch-action:none;user-select:none}
 button{font:inherit;cursor:pointer;border:0;color:inherit}
 button:focus-visible{outline:3px solid #fff;outline-offset:4px}
 [hidden]{display:none!important}
+.app-tools{display:flex;align-items:center;gap:8px 15px;flex-wrap:wrap;color:#e6eeeb;font-size:12px;font-weight:650}
+.app-tools:has(> :not([hidden])){margin-top:12px}
+.app-tools button{color:#fbf5df;background:#15374ae8;border:1px solid #94c8bc;border-radius:5px;padding:7px 13px;font:inherit;cursor:pointer}
+.app-tools button:focus-visible{outline:2px solid #ffbc42;outline-offset:2px}
+#offline-state::before{content:"";display:inline-block;width:7px;height:7px;margin-right:6px;background:#8cf0ba;border-radius:50%}
+#install-help{max-width:330px;margin-top:6px;background:#102a3aeb;color:#fff2d8;padding:8px 10px;border-radius:5px;font-size:13px}
 #scene{position:absolute;inset:0;background:linear-gradient(180deg,#24426d 0%,#8274a9 34%,#f4a68f 64%,#ffd5a7 84%,#f9be99 100%);overflow:hidden}
 #scene::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 73% 42%,#fff8c8 0 5.9%,#ffddaa 6% 7%,#ffdcb96b 9%,transparent 25%);pointer-events:none}
 body:not([data-mode=menu]) #scene{background:linear-gradient(180deg,#24426d,#7875a6 17%,#eda48e 40%,#ffd5a7)}

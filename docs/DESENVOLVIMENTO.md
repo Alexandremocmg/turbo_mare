@@ -32,6 +32,18 @@ Recorde, som, qualidade gráfica e piloto escolhido são preferências locais do
 
 ## Validação
 
+### Aplicativo instalável e GitHub Pages
+
+O Pages publica a raiz de `main`. O manifesto e os ícones estão em `manifest.webmanifest` e `icons/`. A interface de instalação fica em `src/install.js`. O build gera `index.html` e `sw.js`, com uma versão do cache calculada a partir do jogo, do manifesto, dos ícones e do código do service worker. Inclua os dois arquivos gerados no commit. Uma atualização entra em uso após o fechamento das abas e janelas da versão anterior.
+
+Para testar instalação e cache localmente, sirva **a raiz do repositório** em `localhost` depois de gerar os arquivos. O teste abaixo verifica o manifesto, os critérios de instalação do Chromium e a largada de uma corrida com a rede desativada. Ele aceita também o endereço HTTPS publicado.
+
+```sh
+node tests/navegador.cjs --pwa http://localhost:8000/
+```
+
+### Simulação e controles
+
 Execute os comandos a partir da raiz.
 
 ```sh

@@ -6,6 +6,10 @@ Uma corrida 3D pelo Circuito do Kraken. Dez pilotos largam em um píer tropical.
 
 ## Jogar
 
+[**Abrir o Turbo Maré no navegador**](https://alexandremocmg.github.io/turbo_mare/)
+
+Para instalar, abra o link no Chrome ou Edge e use **Instalar jogo** quando aparecer. No iPhone ou iPad, abra no Safari e escolha **Compartilhar → Adicionar à Tela de Início**. Se aparecer **Abrir como App**, deixe essa opção ativada. No primeiro acesso com internet, espere o menu mostrar **Pronto para jogar offline** antes de desconectar.
+
 [Baixe o jogo em um único arquivo HTML](https://raw.githubusercontent.com/Alexandremocmg/turbo_mare/main/index.html). Se o navegador exibir o código, salve a página como `index.html` e abra o arquivo baixado. Você também pode clonar o repositório e abrir o `index.html` da raiz. A arte e o áudio funcionam offline em um navegador com WebGL.
 
 - **Disputar corrida** coloca você no grid com mais nove pilotos. Os quatro anéis dão impulso e os checkpoints encurtam o retorno após uma queda.

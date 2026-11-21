@@ -62,7 +62,7 @@ async function main() {
     });
   }
   async function evaluate(expression) {
-    const r = await send('Runtime.evaluate', {expression, returnByValue: true});
+    const r = await send('Runtime.evaluate', {expression, returnByValue: true, awaitPromise: true});
     if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails));
     return r.result.value;
   }
@@ -85,6 +85,42 @@ async function main() {
 
   await send('Runtime.enable');
   await send('Page.enable');
+  if (process.argv[2] === '--pwa') {
+    const entry = new URL(process.argv[3]);
+    const navigations = [];
+    socket.addEventListener('message', event => {
+      const msg = JSON.parse(event.data);
+      if (msg.method === 'Network.responseReceived' && msg.params.type === 'Document') {
+        navigations.push(msg.params.response);
+      }
+    });
+    await send('Network.enable');
+    await send('Page.navigate', {url:entry.href});
+    await until("navigator.serviceWorker?.controller && document.getElementById('offline-state')?.hidden === false");
+    const manifest = await send('Page.getAppManifest');
+    assert.equal(manifest.errors.length, 0, JSON.stringify(manifest.errors));
+    const app = JSON.parse(manifest.data);
+    const start = new URL(app.start_url, manifest.url);
+    assert.equal(start.href, entry.href);
+    assert.equal(app.display, 'standalone');
+    assert.equal(app.name, 'Turbo Maré');
+    const install = await send('Page.getInstallabilityErrors');
+    assert.deepEqual(install.installabilityErrors, []);
+    await send('Network.emulateNetworkConditions', {
+      offline:true, latency:0, downloadThroughput:0, uploadThroughput:0
+    });
+    await evaluate("document.documentElement.dataset.beforeOfflineReload = 'true'");
+    navigations.length = 0;
+    await send('Page.reload', {ignoreCache:false});
+    await until("!document.documentElement.dataset.beforeOfflineReload && !navigator.onLine && document.getElementById('cover-art')?.naturalWidth > 0 && document.getElementById('bay-art')?.naturalWidth > 0");
+    assert.ok(navigations.some(res => res.fromServiceWorker && res.status === 200), 'Entrada offline pelo service worker');
+    await click('practice');
+    await until(racing);
+    assert.equal(await evaluate("document.querySelector('canvas').getContext('webgl').getError()"), 0);
+    assert.deepEqual(errors, []);
+    console.log('Manifesto instalável no Chromium e treino WebGL iniciado offline em ' + entry.href);
+    return;
+  }
   await send('Emulation.setDeviceMetricsOverride', {width:1365, height:768, deviceScaleFactor:1, mobile:false});
   await send('Page.navigate', {url:pathToFileURL(path.join(root,'index.html')).href});
   await until("document.getElementById('cover-art')?.naturalWidth > 0 && document.getElementById('bay-art')?.naturalWidth > 0 && !!document.querySelector('canvas').getContext('webgl')");

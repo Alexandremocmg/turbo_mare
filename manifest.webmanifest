@@ -1,0 +1,18 @@
+{
+  "id": "./",
+  "name": "Turbo Maré",
+  "short_name": "Turbo Maré",
+  "description": "Corra pelo Circuito do Kraken, salte pelos anéis e desvie dos tentáculos.",
+  "lang": "pt-BR",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#102a3a",
+  "theme_color": "#102a3a",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {"src": "icons/piloto-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icons/piloto-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icons/piloto-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}

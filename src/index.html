@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#102a3a">
+<!-- PWA: head -->
 <title>Turbo Maré | Corrida 3D</title>
 <link rel="stylesheet" href="game.css">
 </head>
@@ -16,6 +17,8 @@
     <p>Pegue os anéis de turbo e escape dos tentáculos para chegar entre os seis primeiros.</p>
     <div class="menu-buttons"><button class="primary" id="play">Disputar corrida <span aria-hidden="true">▶</span></button><button id="practice">Treino livre</button><button id="crew-open">Pilotos</button></div>
     <div class="menu-foot"><span><kbd>WASD</kbd> ou setas</span><span><kbd>Espaço</kbd> Pular</span><span><kbd>Shift</kbd> Mergulhar</span></div>
+    <div class="app-tools"><button type="button" id="install-game" aria-controls="install-help" hidden>Instalar jogo</button><span id="offline-state" role="status" hidden>Pronto para jogar offline</span></div>
+    <div id="install-help" hidden>No Safari, toque em Compartilhar e depois em Adicionar à Tela de Início.</div>
   </div>
 </main>
 <section id="dock" aria-label="Escolha do piloto" hidden>
@@ -60,6 +63,7 @@
 </section>
 <p class="card" id="error" hidden></p>
 <img id="bay-art" hidden alt="" src="art/baia.png">
+<!-- PWA: install -->
 <script src="game.js"></script>
 </body>
 </html>
