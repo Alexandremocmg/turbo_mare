@@ -1001,10 +1001,11 @@ function run() {
   const gaps = [{edge:26,landing:30},{edge:48,landing:51.5},
     {edge:73,landing:76},{edge:96.5,landing:100}];
   const keys = new Set();
-  const stick = {x:0,z:0,id:null};
+  const stick = {x:0,z:0,id:null,ox:0,oy:0};
   const camera = {x:0,y:0,z:0,tx:0,ty:0,tz:0,ready:false};
   let racers, player, finishers, particles, mode = 'menu', resumeMode;
   let countdown, elapsed, obstacleTime, menuTime = 0, lastCount, lastStamp, accumulator=0;
+  let lastTap=-1, tapCount=0;
   let jumpPressed=0, divePressed=0, notice=0, gapHint=false, best=0, muted=false, audio=null;
   try {
     best = Number(localStorage.getItem('turbo-mare-kraken-best')) || 0;
@@ -1202,37 +1203,81 @@ function run() {
   function clearControls() {
     keys.clear();
     jumpPressed=divePressed=0;
+    lastTap=-1;
     stick.id=null;
     moveStick();
+  }
+  // Metade esquerda: o joystick nasce onde o dedo encosta e o acompanha quando ele passa do limite.
+  // Metade direita: um toque pula na hora e um segundo toque logo depois mergulha.
+  const STICK_RADIUS=32, STICK_FOLLOW=46, DOUBLE_TAP=300;
+  function placeStick(x,y) {
+    const box=$('stick'), half=box.offsetWidth/2||56;
+    stick.ox=clamp(x,half*.6,innerWidth-half*.6);
+    stick.oy=clamp(y,half*.6,innerHeight-half*.6);
+    box.classList.add('active');
+    box.style.left=stick.ox-half+'px';
+    box.style.top=stick.oy-half+'px';
   }
   function moveStick(event) {
     let dx=0,dy=0;
     if(event) {
-      const box=$('stick').getBoundingClientRect();
-      dx=event.clientX-box.left-box.width/2;
-      dy=event.clientY-box.top-box.height/2;
+      dx=event.clientX-stick.ox;
+      dy=event.clientY-stick.oy;
+      const length=Math.hypot(dx,dy);
+      if(length>STICK_FOLLOW) {
+        const pull=(length-STICK_FOLLOW)/length;
+        placeStick(stick.ox+dx*pull,stick.oy+dy*pull);
+        dx=event.clientX-stick.ox;
+        dy=event.clientY-stick.oy;
+      }
+    } else {
+      const box=$('stick');
+      box.classList.remove('active');
+      box.style.left=box.style.top='';
     }
-    const radius=32, length=Math.hypot(dx,dy), scale=Math.max(radius,length);
+    const length=Math.hypot(dx,dy), scale=Math.max(STICK_RADIUS,length);
     stick.x=dx/scale;
     stick.z=-dy/scale;
-    $('nub').style.transform='translate(-50%, -50%) translate('+stick.x*radius+'px,'+(-stick.z*radius)+'px)';
+    $('nub').style.transform='translate(-50%, -50%) translate('+stick.x*STICK_RADIUS+'px,'+(-stick.z*STICK_RADIUS)+'px)';
   }
-  $('stick').addEventListener('pointerdown',event=>{
+  const moveZone=$('move-zone');
+  moveZone.addEventListener('pointerdown',event=>{
+    event.preventDefault();
     if (stick.id!==null) return;
     stick.id=event.pointerId;
-    $('stick').setPointerCapture(event.pointerId);
+    moveZone.setPointerCapture(event.pointerId);
+    placeStick(event.clientX,event.clientY);
     moveStick(event);
   });
-  $('stick').addEventListener('pointermove',event=>{if(stick.id===event.pointerId) moveStick(event);});
-  for(const type of ['pointerup','pointercancel','lostpointercapture']) $('stick').addEventListener(type,event=>{
+  moveZone.addEventListener('pointermove',event=>{if(stick.id===event.pointerId) moveStick(event);});
+  for(const type of ['pointerup','pointercancel','lostpointercapture']) moveZone.addEventListener(type,event=>{
     if(stick.id!==event.pointerId) return;
     stick.id=null;
     moveStick();
   });
-  for(const [id,action] of [['jump',()=>jumpPressed=.145],['dive',()=>divePressed=.14]]) {
-    $(id).addEventListener('pointerdown',event=>{event.preventDefault();action();});
-    $(id).addEventListener('click',event=>{if(event.detail===0) action();});
+  function tapRing(x,y,dive) {
+    const ring=document.createElement('i');
+    ring.className='tap-ring'+(dive?' dive':'');
+    ring.style.left=x+'px';
+    ring.style.top=y+'px';
+    $('touch').append(ring);
+    ring.addEventListener('animationend',()=>ring.remove());
   }
+  $('action-zone').addEventListener('pointerdown',event=>{
+    event.preventDefault();
+    const dive=lastTap>=0 && event.timeStamp-lastTap<DOUBLE_TAP;
+    if(dive) {
+      jumpPressed=0;
+      divePressed=.14;
+      lastTap=-1;
+    } else {
+      jumpPressed=.145;
+      lastTap=event.timeStamp;
+    }
+    tapRing(event.clientX,event.clientY,dive);
+    if(++tapCount===6) $('touch').classList.add('learned');
+  });
+  for(const id of ['move-zone','action-zone']) $(id).addEventListener('contextmenu',event=>event.preventDefault());
 
   function floor(x,z) {
     return course.some(p=>Math.abs(x-p.x)<=p.w/2+.13 && Math.abs(z-p.z)<=p.l/2+.13) || onBridge(x,z,obstacleTime);

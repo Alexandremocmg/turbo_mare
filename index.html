@@ -71,7 +71,7 @@ kbd{font-family:inherit;background:#e9fff123;border:1px solid #e9fff132;border-b
 .icon{background:#102d40e5;border:1px solid #e4fff34c;border-radius:8px;min-width:38px;height:38px;font-size:16px;font-weight:900;display:grid;place-items:center}
 .icon:hover,.secondary:hover{background:#245061}
 #settings{display:flex;gap:7px;position:absolute;right:max(17px,env(safe-area-inset-right));bottom:max(17px,env(safe-area-inset-bottom));z-index:4}
-#hud{position:absolute;inset:0;pointer-events:none;color:white}
+#hud{position:absolute;inset:0;pointer-events:none;color:white;z-index:4}
 .hud-top{position:absolute;left:clamp(12px,3vw,44px);right:clamp(12px,3vw,44px);top:max(13px,env(safe-area-inset-top));display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
 .hud-box{background:var(--glass);border:1px solid #e0fff442;border-radius:10px;padding:10px 13px;box-shadow:0 3px 14px #10334438;font-variant-numeric:tabular-nums}
 .hud-box small{color:#aae5db;text-transform:uppercase;letter-spacing:.11em;font-size:10px;font-weight:850;display:block;margin-bottom:2px}
@@ -86,12 +86,18 @@ kbd{font-family:inherit;background:#e9fff123;border:1px solid #e9fff132;border-b
 #toast{position:absolute;left:50%;top:20%;transform:translateX(-50%);padding:8px 15px;background:#123442ee;border:1px solid #a8e8c5;color:var(--lime);border-radius:7px;font-weight:850;font-size:13px;white-space:nowrap}
 #count{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%) rotate(-6deg);font-size:clamp(74px,14vw,155px);font-weight:1000;font-style:italic;line-height:1;color:var(--lime);text-shadow:5px 6px #182944,0 0 24px #0d37436b}
 #touch{display:none;position:absolute;inset:0;pointer-events:none;z-index:3}
-#stick{position:absolute;left:max(18px,env(safe-area-inset-left));bottom:max(21px,env(safe-area-inset-bottom));width:112px;height:112px;border:2px solid #e1fff39e;border-radius:50%;background:#102d4080;pointer-events:auto}
+#move-zone,#action-zone{position:absolute;top:0;bottom:0;pointer-events:auto;touch-action:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+#move-zone{left:0;width:50%}
+#action-zone{right:0;width:50%}
+#stick{position:absolute;left:max(18px,env(safe-area-inset-left));bottom:max(21px,env(safe-area-inset-bottom));width:112px;height:112px;border:2px solid #e1fff39e;border-radius:50%;background:#102d4080;pointer-events:none;opacity:.55;transition:opacity .15s}
+#stick.active{opacity:1;bottom:auto;transition:none}
 #nub{position:absolute;width:45px;height:45px;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:50%;background:#d3ffeed9;box-shadow:0 3px 0 #61968f}
-#actions{position:absolute;right:max(16px,env(safe-area-inset-right));bottom:max(66px,calc(env(safe-area-inset-bottom) + 53px));display:flex;align-items:flex-end;gap:8px;pointer-events:auto}
-#actions button{background:#142e43cf;border:1px solid #e1fff39e;border-radius:50%;width:65px;height:65px;font-weight:900;font-size:10px;text-transform:uppercase;box-shadow:0 3px 0 #0e2539;touch-action:none}
-#actions button:last-child{background:var(--lime);color:#193740;width:76px;height:76px}
-#actions span{display:block;font-size:21px;line-height:1.15}
+#action-hint{position:absolute;right:max(16px,env(safe-area-inset-right));bottom:max(74px,calc(env(safe-area-inset-bottom) + 60px));margin:0;padding:8px 12px;border:1px solid #e1fff35e;border-radius:8px;background:#142e4399;color:#fff8e7;font-size:11px;line-height:1.5;text-align:right;text-transform:uppercase;letter-spacing:.06em;pointer-events:none;opacity:.8;transition:opacity .6s}
+#action-hint b{color:var(--lime)}
+#touch.learned #action-hint{opacity:0}
+.tap-ring{position:absolute;width:74px;height:74px;margin:-37px 0 0 -37px;border:3px solid var(--lime);border-radius:50%;pointer-events:none;animation:tap-ring .35s ease-out forwards}
+.tap-ring.dive{border-color:var(--mint);border-width:5px}
+@keyframes tap-ring{from{transform:scale(.45);opacity:.95}to{transform:scale(1.25);opacity:0}}
 @media(pointer:coarse){#touch:not([hidden]){display:block}.menu-foot{display:none}}
 #modal{position:absolute;inset:0;display:grid;place-items:center;background:#071f30b8;z-index:6;padding:14px}
 .card{width:min(420px,100%);border-radius:17px;border:1px solid #b8f9dc62;background:#112f42;padding:clamp(20px,5vw,34px);box-shadow:0 12px 50px #061b30a0}
@@ -227,8 +233,9 @@ body[data-turbo="on"] #hud::before{opacity:1}
 </div>
 <div id="settings"><button class="icon" id="sound" aria-label="Desativar som" title="Desativar som">♫</button></div>
 <div id="touch" hidden>
-  <div id="stick" aria-label="Controle de direção"><div id="nub"></div></div>
-  <div id="actions"><button id="dive"><span aria-hidden="true">»</span>Mergulho</button><button id="jump"><span aria-hidden="true">↑</span>Pulo</button></div>
+  <div id="move-zone" aria-label="Direção: toque e arraste em qualquer ponto da metade esquerda"></div>
+  <div id="action-zone" aria-label="Ação: um toque pula, dois toques mergulham"><p id="action-hint"><b>1 toque</b> pula<br><b>2 toques</b> mergulha</p></div>
+  <div id="stick" aria-hidden="true"><div id="nub"></div></div>
 </div>
 <div id="celebrate" aria-hidden="true"></div>
 <section id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
@@ -1671,10 +1678,11 @@ function run() {
   const gaps = [{edge:26,landing:30},{edge:48,landing:51.5},
     {edge:73,landing:76},{edge:96.5,landing:100}];
   const keys = new Set();
-  const stick = {x:0,z:0,id:null};
+  const stick = {x:0,z:0,id:null,ox:0,oy:0};
   const camera = {x:0,y:0,z:0,tx:0,ty:0,tz:0,ready:false};
   let racers, player, finishers, particles, mode = 'menu', resumeMode;
   let countdown, elapsed, obstacleTime, menuTime = 0, lastCount, lastStamp, accumulator=0;
+  let lastTap=-1, tapCount=0;
   let jumpPressed=0, divePressed=0, notice=0, gapHint=false, best=0, muted=false, audio=null;
   try {
     best = Number(localStorage.getItem('turbo-mare-kraken-best')) || 0;
@@ -1872,37 +1880,81 @@ function run() {
   function clearControls() {
     keys.clear();
     jumpPressed=divePressed=0;
+    lastTap=-1;
     stick.id=null;
     moveStick();
+  }
+  // Metade esquerda: o joystick nasce onde o dedo encosta e o acompanha quando ele passa do limite.
+  // Metade direita: um toque pula na hora e um segundo toque logo depois mergulha.
+  const STICK_RADIUS=32, STICK_FOLLOW=46, DOUBLE_TAP=300;
+  function placeStick(x,y) {
+    const box=$('stick'), half=box.offsetWidth/2||56;
+    stick.ox=clamp(x,half*.6,innerWidth-half*.6);
+    stick.oy=clamp(y,half*.6,innerHeight-half*.6);
+    box.classList.add('active');
+    box.style.left=stick.ox-half+'px';
+    box.style.top=stick.oy-half+'px';
   }
   function moveStick(event) {
     let dx=0,dy=0;
     if(event) {
-      const box=$('stick').getBoundingClientRect();
-      dx=event.clientX-box.left-box.width/2;
-      dy=event.clientY-box.top-box.height/2;
+      dx=event.clientX-stick.ox;
+      dy=event.clientY-stick.oy;
+      const length=Math.hypot(dx,dy);
+      if(length>STICK_FOLLOW) {
+        const pull=(length-STICK_FOLLOW)/length;
+        placeStick(stick.ox+dx*pull,stick.oy+dy*pull);
+        dx=event.clientX-stick.ox;
+        dy=event.clientY-stick.oy;
+      }
+    } else {
+      const box=$('stick');
+      box.classList.remove('active');
+      box.style.left=box.style.top='';
     }
-    const radius=32, length=Math.hypot(dx,dy), scale=Math.max(radius,length);
+    const length=Math.hypot(dx,dy), scale=Math.max(STICK_RADIUS,length);
     stick.x=dx/scale;
     stick.z=-dy/scale;
-    $('nub').style.transform='translate(-50%, -50%) translate('+stick.x*radius+'px,'+(-stick.z*radius)+'px)';
+    $('nub').style.transform='translate(-50%, -50%) translate('+stick.x*STICK_RADIUS+'px,'+(-stick.z*STICK_RADIUS)+'px)';
   }
-  $('stick').addEventListener('pointerdown',event=>{
+  const moveZone=$('move-zone');
+  moveZone.addEventListener('pointerdown',event=>{
+    event.preventDefault();
     if (stick.id!==null) return;
     stick.id=event.pointerId;
-    $('stick').setPointerCapture(event.pointerId);
+    moveZone.setPointerCapture(event.pointerId);
+    placeStick(event.clientX,event.clientY);
     moveStick(event);
   });
-  $('stick').addEventListener('pointermove',event=>{if(stick.id===event.pointerId) moveStick(event);});
-  for(const type of ['pointerup','pointercancel','lostpointercapture']) $('stick').addEventListener(type,event=>{
+  moveZone.addEventListener('pointermove',event=>{if(stick.id===event.pointerId) moveStick(event);});
+  for(const type of ['pointerup','pointercancel','lostpointercapture']) moveZone.addEventListener(type,event=>{
     if(stick.id!==event.pointerId) return;
     stick.id=null;
     moveStick();
   });
-  for(const [id,action] of [['jump',()=>jumpPressed=.145],['dive',()=>divePressed=.14]]) {
-    $(id).addEventListener('pointerdown',event=>{event.preventDefault();action();});
-    $(id).addEventListener('click',event=>{if(event.detail===0) action();});
+  function tapRing(x,y,dive) {
+    const ring=document.createElement('i');
+    ring.className='tap-ring'+(dive?' dive':'');
+    ring.style.left=x+'px';
+    ring.style.top=y+'px';
+    $('touch').append(ring);
+    ring.addEventListener('animationend',()=>ring.remove());
   }
+  $('action-zone').addEventListener('pointerdown',event=>{
+    event.preventDefault();
+    const dive=lastTap>=0 && event.timeStamp-lastTap<DOUBLE_TAP;
+    if(dive) {
+      jumpPressed=0;
+      divePressed=.14;
+      lastTap=-1;
+    } else {
+      jumpPressed=.145;
+      lastTap=event.timeStamp;
+    }
+    tapRing(event.clientX,event.clientY,dive);
+    if(++tapCount===6) $('touch').classList.add('learned');
+  });
+  for(const id of ['move-zone','action-zone']) $(id).addEventListener('contextmenu',event=>event.preventDefault());
 
   function floor(x,z) {
     return course.some(p=>Math.abs(x-p.x)<=p.w/2+.13 && Math.abs(z-p.z)<=p.l/2+.13) || onBridge(x,z,obstacleTime);

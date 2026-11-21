@@ -12,7 +12,7 @@ module.exports = function criarSimulador(createTurboRoom) {
     createElement: () => ({getContext: () => null}),
     getElementById(id) {
       if (!objects.has(id)) {
-        objects.set(id, {getContext: () => gl, style: {}, previousElementSibling: {}, replaceChildren() {}, addEventListener() {}, focus() {}});
+        objects.set(id, {getContext: () => gl, style: {}, previousElementSibling: {}, replaceChildren() {}, addEventListener() {}, focus() {}, classList: {add() {}, remove() {}, contains: () => false}, append() {}});
       }
       return objects.get(id);
     }

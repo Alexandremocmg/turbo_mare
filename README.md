@@ -25,9 +25,9 @@ Cada prova distribui **10, 8, 6, 4, 2 e 1 ponto** por colocação. Quem cruza a 
 
 | Ação | Computador | Tela de toque |
 | --- | --- | --- |
-| Mover | WASD ou setas | Controle direcional à esquerda |
-| Pular | Espaço | Pulo |
-| Mergulhar | Shift | Mergulho |
+| Mover | WASD ou setas | Toque e arraste em qualquer ponto da metade esquerda |
+| Pular | Espaço | Um toque na metade direita |
+| Mergulhar | Shift | Dois toques rápidos na metade direita |
 | Pausar no solo ou abrir o menu de saída online | Esc | Botão de pausa |
 | Reiniciar no solo | R durante a corrida | Pausa → Reiniciar |
 
