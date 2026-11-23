@@ -94,28 +94,37 @@ test('um único sucessor assume o estado da aba congelada e mantém o convite ap
   assert.equal(c.el('room-title').textContent,'Placar após a Baía');
   bus.advance(11000);c.tick();bus.flush();assert.equal(c.view.track,'estaleiro');
   c.api.finish(victory);bus.flush();
+  assert.equal(c.el('room-title').textContent,'Placar após o Estaleiro');
+  bus.advance(11000);c.tick();bus.flush();assert.equal(c.view.track,'farol');
+  c.api.finish(victory);bus.flush();
   assert.equal(c.el('room-title').textContent,'Pódio da Copa');
   const d=browser(bus,'Brisa',a.invite);
   assert.equal(d.el('room-title').textContent,'Pódio da Copa');
-  c.start();bus.flush();assert.equal(c.view.begins,3);assert.equal(d.view.begins,1);assert.equal(d.view.leaderSlot,2);
+  c.start();bus.flush();assert.equal(c.view.begins,4);assert.equal(d.view.begins,1);assert.equal(d.view.leaderSlot,2);
 });
 
-test('a Copa soma as duas provas uma vez, desempata no Estaleiro e zera a revanche',()=>{
+test('a Copa soma três provas uma vez, desempata no Farol e zera a revanche',()=>{
   const bus=relay(), a=browser(bus,'Sol'), b=browser(bus,'Lua',a.invite), c=browser(bus,'Sal',a.invite);
   const table=p=>p.el('cup-rows').children.map(row=>row.children.map(cell=>cell.textContent));
   const results=(order)=>order.map((slot,i)=>({name:['Sol','Lua','Sal'][slot],slot,score:String(i+1),eligible:slot!==2}));
   a.start();bus.flush();
   a.api.finish(results([0,1,2]));a.api.finish(results([0,1,2]));bus.flush();
-  assert.deepEqual(table(a)[0],['1º Sol (você)','10','—','10']);
-  assert.deepEqual(table(b)[2],['3º Sal','0','—','0']);
+  assert.deepEqual(table(a)[0],['1º Sol (você)','10','—','—','10']);
+  assert.deepEqual(table(b)[2],['3º Sal','0','—','—','0']);
   a.hide();bus.flush();bus.advance(11000);b.tick();bus.flush();
   assert.equal(b.view.track,'estaleiro');assert.equal(b.view.host,true);
-  b.api.finish(results([1,0,2]));bus.flush();
-  assert.deepEqual(table(a)[0],['1º Lua','8','10','18']);
-  assert.deepEqual(table(c)[1],['2º Sol','10','8','18']);
-  assert.equal(a.el('room-url').value,b.invite);assert.equal(b.el('room-start').textContent,'Revanche');
-  b.start();bus.flush();assert.equal(a.view.track,'baia');
-  b.api.finish(results([1,0,2]));bus.flush();assert.deepEqual(table(b)[0],['1º Lua (você)','10','—','10']);
+  b.api.finish(results([0,1,2]));bus.flush();
+  assert.deepEqual(table(a)[0],['1º Sol (você)','10','10','—','20']);
+  assert.deepEqual(table(c)[1],['2º Lua','8','8','—','16']);
+  b.hide();bus.flush();bus.advance(11000);c.tick();bus.flush();
+  assert.equal(c.view.track,'farol');assert.equal(c.view.host,true);
+  // All three have different final scores. On a tied total the final outranks the earlier heats.
+  c.api.finish(results([1,2,0]).map(r=>({...r,eligible:true})));bus.flush();
+  assert.deepEqual(table(a)[0],['1º Lua','8','8','10','26']);
+  assert.deepEqual(table(c)[1],['2º Sol','10','10','6','26']);
+  assert.equal(a.el('room-url').value,b.invite);assert.equal(c.el('room-start').textContent,'Revanche');
+  c.start();bus.flush();assert.equal(a.view.track,'baia');
+  c.api.finish(results([1,0,2]));bus.flush();assert.deepEqual(table(b)[0],['1º Lua (você)','10','—','—','10']);
 });
 
 test('uma saída voluntária envia o estado final mesmo antes do próximo snapshot',()=>{

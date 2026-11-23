@@ -38,9 +38,11 @@ A simulação de `src/game.js` roda no navegador do anfitrião. Os convidados en
 
 Ao ocultar a aba, o anfitrião envia o estado da pista e transfere a simulação a um participante visível. Uma saída voluntária também envia o estado final. Se o navegador fechar abruptamente, os participantes usam o último estado recebido. Quando a conexão permanece aberta e a aba para de responder, um participante ativo pode assumir após alguns segundos. O relay ordena as solicitações e cada troca incrementa a geração da sala para descartar mensagens atrasadas. O sucessor preserva cronômetro, posições, velocidades, checkpoints, anéis e chegadas. A corrida precisa de pelo menos um piloto com o jogo ativo.
 
-Convites da Copa incluem `&copa=1`. Cada cliente guarda os pontos das duas provas quando recebe a chegada oficial do anfitrião. O número da corrida avança também na revanche e permite ignorar mensagens de uma largada anterior. O intervalo usa o mesmo mecanismo de troca de anfitrião da corrida. Convites anteriores à Copa continuam no canal de prova única.
+Novas salas usam `&copa=2` para as três provas. Os convites `&copa=1` ainda conectam aos campeonatos de duas pistas no canal anterior. Cada cliente registra a pontuação quando recebe a chegada oficial e usa o número da corrida para ignorar resultados antigos. A troca de anfitrião funciona nas provas e nos dois intervalos.
 
-O primeiro teste abaixo usa três perfis isolados do Chrome e um convite novo no relay real. Ele congela a aba de quem criou a sala, verifica o avanço dos convidados, testa a saída dos anfitriões e acompanha o último piloto. O segundo usa dois perfis para jogar as duas provas, comparar o placar e iniciar a revanche. Para testar localmente, sirva a raiz por HTTP e substitua a URL por `http://localhost:8000/`.
+Em `src/farol.js`, a distância ao longo do percurso e o deslocamento lateral determinam a posição na espiral. Pilotos, câmera, rochas e piso usam a mesma geometria. O relógio dos obstáculos determina o nível do mar, a janela de travessia, os sinais e os anéis. A troca de anfitrião restaura esse relógio a partir do último estado da corrida.
+
+O primeiro teste abaixo usa três perfis isolados do Chrome e um convite novo no relay real. Ele congela a aba de quem criou a sala, verifica o avanço dos convidados, testa a saída dos anfitriões e acompanha o último piloto. O segundo usa dois perfis para jogar as três provas, comparar o placar e iniciar a revanche. Para testar localmente, sirva a raiz por HTTP e substitua a URL por `http://localhost:8000/`.
 
 ```sh
 node tests/salas.cjs https://alexandremocmg.github.io/turbo_mare/
@@ -65,7 +67,7 @@ Execute os comandos a partir da raiz.
 
 ```sh
 node scripts/build.cjs --check
-node --test tests/corrida.test.cjs tests/kraken.test.cjs tests/multiplayer.test.cjs tests/continuidade.test.cjs
+node --test tests/corrida.test.cjs tests/kraken.test.cjs tests/multiplayer.test.cjs tests/continuidade.test.cjs tests/farol.test.cjs
 node tests/navegador.cjs
 ```
 

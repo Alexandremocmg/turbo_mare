@@ -32,7 +32,7 @@ module.exports = function criarSimulador(createTurboRoom) {
       get finishers() { return finishers; }
     });
   `;
-  const script = fs.readFileSync(path.join(__dirname, '../src/game.js'), 'utf8');
+  const script = ['farol.js','game.js'].map(file=>fs.readFileSync(path.join(__dirname,'../src',file),'utf8')).join('\n');
   const frameStart = /  requestAnimationFrame\(frame\);\s*\}\s*$/;
   if (!frameStart.test(script)) throw new Error('O simulador não encontrou o início do loop principal.');
   let game;

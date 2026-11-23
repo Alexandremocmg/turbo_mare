@@ -61,7 +61,7 @@ async function verify({send,evaluate,until,click,key,screenshot}) {
   }
   const inCup=scenario==='--copa';
   async function drive(heat){
-    await until("document.body.dataset.mode==='race' && document.getElementById('progress-name').textContent.startsWith('"+heat+"/2')");
+    await until("document.body.dataset.mode==='race' && document.getElementById('progress-name').textContent.startsWith('"+heat+"/3')");
     await key('keyDown','KeyW','w',87);
     if(heat===1){
       await evaluate(`window.cupDriver=setInterval(()=>{
@@ -73,11 +73,11 @@ async function verify({send,evaluate,until,click,key,screenshot}) {
     } else if(role==='--guest'){
       await evaluate('window.captureGL=true');
       await sleep(1150);
-      await screenshot('estaleiro');
+      await screenshot(heat===2?'estaleiro':'farol');
       assert.equal(await evaluate("document.querySelector('canvas').getContext('webgl').getError()"),0);
       await evaluate('window.captureGL=false');
     }
-    const title=heat===1?'Placar após a Baía':'Pódio da Copa';
+    const title=['Placar após a Baía','Placar após o Estaleiro','Pódio da Copa'][heat-1];
     await until("document.getElementById('room').open && document.getElementById('room-title').textContent==="+JSON.stringify(title),230000);
     await key('keyUp','KeyW','w',87);
     await evaluate('clearInterval(window.cupDriver)');
@@ -90,18 +90,24 @@ async function verify({send,evaluate,until,click,key,screenshot}) {
     assert.ok(halfway.some(r=>Number(r[1])>0),'Pontuação da Baía');
     notify(role+'-half');
     await drive(2);
+    const second=await readTable();
+    assert.ok(second.some(r=>Number(r[2])>0),'Pontuação do Estaleiro');
+    assert.ok(second.every(r=>r[3]==='—'));
+    notify(role+'-estaleiro');
+    await drive(3);
     const podium=await readTable();
     assert.equal(podium.length,2);
-    assert.ok(podium.some(r=>Number(r[2])>0),'Pontuação do Estaleiro');
+    assert.ok(podium.some(r=>Number(r[3])>0),'Pontuação do Farol');
     for(const row of podium){
-      assert.equal(Number(row[3]),Number(row[1])+Number(row[2]));
+      assert.equal(Number(row[4]),Number(row[1])+Number(row[2])+Number(row[3]));
+      assert.ok(second.some(r=>r[0].slice(3)===row[0].slice(3) && r[2]===row[2]));
       assert.ok(halfway.some(r=>r[0].slice(3)===row[0].slice(3) && r[1]===row[1]));
     }
     assert.equal(await evaluate("document.getElementById('room-url').value"),invite);
     notify(role+'-podium',JSON.stringify(podium));
     await wait(role==='--host'?'--guest-podium':'--host-podium');
     if(await evaluate("!document.getElementById('room-start').hidden"))await click('room-start');
-    await until("document.body.dataset.mode==='race' && document.getElementById('progress-name').textContent.startsWith('1/2')");
+    await until("document.body.dataset.mode==='race' && document.getElementById('progress-name').textContent.startsWith('1/3')");
     notify(role+'-rematch');
     await wait(role==='--host'?'--guest-rematch':'--host-rematch');
   }

@@ -31,8 +31,8 @@
   </form>
   <div id="room-invite" hidden><label for="room-url">Link do convite</label><div class="invite-row"><input id="room-url" readonly><button id="room-copy" type="button">Copiar link</button></div></div>
   <ol id="room-list"></ol>
-  <table id="cup-board" hidden aria-label="Pontuação da Copa das Marés"><thead><tr><th scope="col">Piloto</th><th scope="col">Baía</th><th scope="col">Estaleiro</th><th scope="col">Total</th></tr></thead><tbody id="cup-rows"></tbody></table>
-  <details id="cup-rules" hidden><summary>Como pontuar</summary><p>Do 1º ao 6º lugar, as provas valem 10, 8, 6, 4, 2 e 1 ponto. Quem chega primeiro fica à frente. Ao acabar o tempo, quem alcançou um checkpoint também pontua pela distância percorrida. Em caso de empate na soma, vale a pontuação do Estaleiro.</p></details>
+  <table id="cup-board" hidden aria-label="Pontuação da Copa das Marés"><thead><tr><th scope="col">Piloto</th><th scope="col">Baía</th><th scope="col">Estaleiro</th><th scope="col" id="cup-farol-column">Farol</th><th scope="col">Total</th></tr></thead><tbody id="cup-rows"></tbody></table>
+  <details id="cup-rules" hidden><summary>Como pontuar</summary><p>Do 1º ao 6º lugar, as provas valem 10, 8, 6, 4, 2 e 1 ponto. Quem chega primeiro fica à frente. Ao acabar o tempo, quem alcançou um checkpoint também pontua pela distância percorrida. Em caso de empate na soma, vale a pontuação da última prova.</p></details>
   <div class="room-actions"><button id="room-start" class="primary" hidden>Largar</button><button id="room-leave">Voltar</button></div>
 </dialog>
 <dialog id="race-exit" aria-labelledby="exit-title"><h2 id="exit-title">Sair da corrida?</h2><p id="exit-info"></p><div class="room-actions"><button id="race-stay" class="primary">Continuar</button><button id="race-leave">Sair da sala</button></div></dialog>
@@ -81,6 +81,7 @@
 <img id="bay-art" hidden alt="" src="art/baia.png">
 <!-- PWA: install -->
 <script src="rooms.js"></script>
+<script src="farol.js"></script>
 <script src="game.js"></script>
 </body>
 </html>

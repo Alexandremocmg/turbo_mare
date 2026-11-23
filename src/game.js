@@ -42,7 +42,7 @@ function run() {
     varying vec3 objectPos;
     uniform vec3 center, size, eye, side, up, forward;
     uniform vec2 yaw, tilt, bank, lens, shadowCenter;
-    uniform float passKind;
+    uniform float passKind, seaLevel;
     varying vec3 world, n;
     varying float distanceZ, localY;
     vec3 rotate(vec3 p) {
@@ -77,7 +77,7 @@ function run() {
         gl_Position=vec4(lightUV,-world.y/43.,1.);distanceZ=0.;return;
       }
       vec3 projected=world;
-      if(passKind>1.5) projected.y=-6.8-world.y;
+      if(passKind>1.5) projected.y=2.*seaLevel-world.y;
       vec3 v = projected-eye;
       distanceZ = dot(v,forward);
       gl_Position = vec4(dot(v,side)*lens.x,dot(v,up)*lens.y,
@@ -85,7 +85,7 @@ function run() {
     }`;
   const fragmentSource = `
     precision highp float;
-    uniform float passKind, shadowsOn, mirrorOn;
+    uniform float passKind, shadowsOn, mirrorOn, seaLevel;
     uniform sampler2D shadows, mirror, bay, deckPrint;
     uniform float hasBay, deckReady;
     uniform vec2 shadowCenter, viewportSize, lens;
@@ -128,7 +128,7 @@ function run() {
         float low=fract(depth*255.);
         gl_FragColor=vec4(depth-low/255.,low,0.,1.);return;
       }
-      if(passKind>1.5 && world.y< -3.38) discard;
+      if(passKind>1.5 && world.y<seaLevel+.02) discard;
       vec3 tint=surfaceColor;
       vec3 color=tint;
       vec3 N=normalize(n), V=normalize(eye-world), L=normalize(vec3(.68,1.,.53));
@@ -152,6 +152,15 @@ function run() {
         float highlight=pow(max(0.,dot(N,normalize(L+V))),gloss);
         float rim=pow(1.-max(dot(N,V),0.),3.);
         color=tint*(indirect*.74+sunlit*visibility*vec3(.68,.57,.47));
+        if(effect>5.5 && effect<6.5){
+          vec2 stone=N.y>.65?world.xz:vec2(atan(world.z,world.x)*5.1,world.y);
+          vec2 tile=stone/vec2(1.64,.73);
+          tile.x+=.5*mod(floor(tile.y),2.);
+          vec2 seam=min(fract(tile),1.-fract(tile));
+          float mortar=1.-smoothstep(.006,.035,min(seam.x*1.64,seam.y*.73));
+          float relief=.93+.11*hash(floor(tile))+.04*(noise2(stone*9.)-.5);
+          color*=mix(1.,relief*(1.-.24*mortar),1.-smoothstep(12.,42.,distanceZ));
+        }
         color+=vec3(1.,.86,.63)*highlight*visibility*.28+vec3(.28,.43,.51)*rim*.26;
         if(finish>.5){
           vec3 R=reflect(-V,N);
@@ -238,7 +247,7 @@ function run() {
   gl.enable(gl.DEPTH_TEST);
   for (const key of ['position','normal']) gl.enableVertexAttribArray(gl.getAttribLocation(program,key));
   const attributes = ['position','normal'].map(key => gl.getAttribLocation(program,key));
-  const u = Object.fromEntries(['center','size','eye','side','up','forward','yaw','tilt','bank','lens','tint','effect','opacity','tide','passKind','shadowCenter','shadowsOn','mirrorOn','shadows','mirror','viewportSize','bay','hasBay','deckPrint','deckReady'].map(key => [key,gl.getUniformLocation(program,key)]));
+  const u = Object.fromEntries(['center','size','eye','side','up','forward','yaw','tilt','bank','lens','tint','effect','opacity','tide','seaLevel','passKind','shadowCenter','shadowsOn','mirrorOn','shadows','mirror','viewportSize','bay','hasBay','deckPrint','deckReady'].map(key => [key,gl.getUniformLocation(program,key)]));
 
   function target(w,h,smooth){
     const texture=gl.createTexture();
@@ -642,12 +651,15 @@ function run() {
   function drawFestival(t){
     for(let i=0;i<gates.length;i++){
       const g=gates[i];
-      draw(hoop,g.x,g.y,g.z,3.15,3.15,3.15,player.gates.has(i)?'teal':'gold',0,0,2);
+      if(g.tidal && !farol.low(t))continue;
+      const turn=atFarol?farol.yaw(g.z):0;
+      draw(hoop,...coursePoint(g.x,g.y,g.z),3.15,3.15,3.15,player.gates.has(i)?'teal':'gold',turn,0,2);
       for(let k=0;k<3;k++){
         const a=t*2+k*TAU/3;
-        draw(ball,g.x+1.5*Math.cos(a),g.y+1.5*Math.sin(a),g.z,.24,.24,.24,'white',0,0,2);
+        draw(ball,...coursePoint(g.x+1.5*Math.cos(a),g.y+1.5*Math.sin(a),g.z),.24,.24,.24,'white',0,0,2);
       }
     }
+    if(atFarol){farol.drawSignals(t);return;}
     if(shipyard) {drawShipyard(t);return;}
     drawKraken(t);
     for(const a of attacks){
@@ -878,7 +890,9 @@ function run() {
     checkpoints:[3.5,31,67],springs:[],attacks:[],spinners:[],bumpers:[],finish:109,
     gates:[{x:1.5,y:1.85,z:53},{x:3.3,y:2.3,z:90.5}]
   };
-  let shipyard=false;
+  const farol=createFarol({mesh,drum,cube,soft,ball,cliff,beam,add,bakeStatic,draw});
+  let activeTrack=bay,shipyard=false,atFarol=false;
+  function coursePoint(x,y,z){return atFarol?farol.world(x,y,z):[x,y,z];}
   const bridgeZ=46, bridgeWidth=4.5, bridgeLength=10.8;
   const bridgeX=t=>1.4+3.4*Math.sin(t*.77);
   const cranes=[{z:20,phase:0},{z:66,phase:1.8},{z:101,phase:3.7}];
@@ -955,14 +969,15 @@ function run() {
     cargoShell=makeCargoShell();
     return bakeStatic(fixed);
   }
-  function selectTrack(useYard){
-    if(shipyard===useYard)return;
-    shipyard=useYard;
+  function selectTrack(track){
+    const next=track==='farol'?farol:track==='estaleiro'?yard:bay;
+    if(next===activeTrack)return;
+    activeTrack=next;shipyard=next===yard;atFarol=next===farol;
     if(shipyard && !yard.fixedScene)yard.fixedScene=buildYard();
-    const next=shipyard?yard:bay;
+    if(atFarol && !farol.fixedScene)farol.fixedScene=farol.build();
     ({course,checkpoints,springs,gates,attacks,spinners,bumpers,fixedScene}=next);
     COURSE_END=next.finish;
-    gl.uniform1f(u.deckReady,shipyard?0:1);
+    gl.uniform1f(u.deckReady,next===bay?1:0);
   }
   function drawShipyard(t){
     function load(x,z,bottom,w,h,d,tint){
@@ -984,7 +999,7 @@ function run() {
     for(const s of spinners) s.a=t*s.w+s.p;
   }
   function drawObstacles(t) {
-    if(shipyard)return;
+    if(activeTrack!==bay)return;
     for(const b of bumpers)drawCrab(b,t,Math.abs(player.z-b.z)<36);
     for(const s of spinners){
       draw(s.pivot,s.x,0,s.z,1,1,1,'white');
@@ -1017,15 +1032,16 @@ function run() {
   let training=false, beatIndex=-1, online=null, room=null, lastNetSend=0, rankSignature='';
   const netFields=['x','y','z','vx','vy','vz','a','stride','bank','landing','hit','stun','dive','flight','boost','wait','cp','result','raceTime','falls'];
   function freshRace() {
-    selectTrack(online?.track==='estaleiro');
-    $('progress-name').textContent=online?.track?(shipyard?'2/2 · Estaleiro à Deriva':'1/2 · Baía do Kraken'):'Circuito do Kraken';
+    selectTrack(online?.track);
+    const heat=(atFarol?3:shipyard?2:1)+'/'+(online?.heats||3);
+    $('progress-name').textContent=online?.track?heat+' · '+(atFarol?'Farol da Ressaca':shipyard?'Estaleiro à Deriva':'Baía do Kraken'):'Circuito do Kraken';
     $('cup-leg').hidden=!online?.track;
-    $('cup-leg').textContent=shipyard?'2/2':'1/2';
+    $('cup-leg').textContent=heat;
     seed = 9137;
     const grid = [[0,4.5],[-3.8,5.7],[3.8,5.7],[-1.85,5.3],[1.85,5.35],
       [-5.8,4],[-2.85,2.9],[2.85,2.9],[5.8,4],[0,2]];
     racers = grid.map(([x,z],i) => ({
-      i,x,z,y:0,vx:0,vz:0,vy:0,a:0,stride:i*.7,wait:0,stun:0,hit:0,dive:0,
+      i,x:atFarol?x*.48:x,z,y:0,vx:0,vz:0,vy:0,a:0,stride:i*.7,wait:0,stun:0,hit:0,dive:0,
       cp:0,ground:true,coyote:.12,result:0,raceTime:0,falls:0,speed:botSpeeds[i]+random()*.24,
       lane:[-5.55,0,5.55][(i*2)%3], bias:x*.79, reaction:.2+random()*.6,
       error:random(), nextJump:0,flight:0,boost:0,gates:new Set(),springLock:0
@@ -1235,12 +1251,14 @@ function run() {
   }
 
   function floor(x,z) {
+    if(atFarol)return farol.floor(x,z,obstacleTime);
     return course.some(p=>Math.abs(x-p.x)<=p.w/2+.13 && Math.abs(z-p.z)<=p.l/2+.13) || onBridge(x,z,obstacleTime);
   }
   function splash(r) {
-    for(let i=0;i<12;i++) particles.push({x:r.x,y:-3.29,z:r.z,
+    for(let i=0;i<12;i++) particles.push({x:r.x,y:waterAtRacer(r),z:r.z,
       vx:(random()-.5)*6,vy:1.5+random()*4,vz:(random()-.5)*6,life:.22+random()*.45});
   }
+  function waterAtRacer(r){return atFarol?farol.water(obstacleTime)-farol.height(r.x,r.z): -3.29;}
   function respawn(r) {
     r.x=r.i===0?0:r.bias*.65;
     r.y=0;
@@ -1401,9 +1419,11 @@ function run() {
     if(speed<=.28)r.bank=(r.bank||0)*Math.exp(-9*dt);
     r.stride+=dt*speed*1.95;
     if(r.ground && onBridge(r.x,r.z,obstacleTime-dt))r.x+=bridgeX(obstacleTime)-bridgeX(obstacleTime-dt);
+    const oldHeight=atFarol && !r.ground?farol.height(r.x,r.z):null;
     r.x+=r.vx*dt;
-    r.z+=r.vz*dt;
+    r.z+=r.vz*dt*(atFarol?farol.distanceScale(r.x,r.z):1);
     const prevY=r.y;
+    if(oldHeight!==null)r.y+=oldHeight-farol.height(r.x,r.z);
     r.vy-=19.8*dt;
     r.y+=r.vy*dt;
     if(r.vy<=0 && prevY>=-.018 && r.y<=0 && floor(r.x,r.z)) {
@@ -1417,13 +1437,14 @@ function run() {
     }
     for(let i=0;i<gates.length;i++){
       const g=gates[i];
+      if(g.tidal && !farol.low(obstacleTime))continue;
       if(!r.gates.has(i) && Math.abs(r.z-g.z)<.42 && Math.hypot(r.x-g.x,r.y+.85-g.y)<1.54){
         r.gates.add(i);r.boost=2.35;
         if(r===player){notify('Anel de turbo!');tone(540,.22,'sine',0,1.8);}
       }
     }
     if(r.y>-1) collideObstacles(r);
-    if(r.y < -3.29) {
+    if(r.y < waterAtRacer(r)) {
       splash(r);
       r.wait=.65+r.reaction*.44;
       r.falls++;
@@ -1480,7 +1501,8 @@ function run() {
     const percent = Math.floor(clamp((progressOf(player)-4.5)/(COURSE_END-4.5),0,1)*100);
     $('place').textContent=training?'Treino':rank+'º';
     $('field-size').textContent=training?'':'/ '+racers.length;
-    $('sector').textContent=shipyard?(player.z<30?'Estaleiro · Pórtico de carga':player.z<54?'Estaleiro · Doca seca':player.z<90?'Estaleiro · Cais de montagem':'Estaleiro · Doca de chegada'):
+    $('sector').textContent=atFarol?(player.z<64?farol.tideLabel(obstacleTime):player.z<136?'Farol · Rampa em espiral':'Farol · Galeria da lanterna'):
+      shipyard?(player.z<30?'Estaleiro · Pórtico de carga':player.z<54?'Estaleiro · Doca seca':player.z<90?'Estaleiro · Cais de montagem':'Estaleiro · Doca de chegada'):
       player.z<35?'Píer de largada':player.z<77?(player.x>8?'Atalho do recife':'Passagem do recife'):player.z<100?'Canal da mola':'Baía do Kraken';
     $('ring-score').textContent='◎ '+player.gates.size+'/'+gates.length;
     document.body.dataset.turbo=(player.boost>0||player.flight>0)?'on':'off';
@@ -1557,7 +1579,7 @@ function run() {
     separateRacers();
     if(shipyard && !gapHint && player.z>29 && player.z<38){
       gapHint=true;notify('Cais à esquerda ou salto pelo contêiner!');
-    } else if(!shipyard && !gapHint && !player.flight && player.z>20 && player.z<25.8) {
+    } else if(activeTrack===bay && !gapHint && !player.flight && player.z>20 && player.z<25.8) {
       gapHint=true;
       notify(matchMedia('(pointer:coarse)').matches?'Pule para atravessar o vão':'Espaço para atravessar o vão');
     }
@@ -1865,7 +1887,8 @@ function run() {
   }
 
   function drawRacer(r){
-    if(r.left||r.wait>0||r.y<-3.26)return;
+    if(r.left||r.wait>0||r.y<waterAtRacer(r))return;
+    const [rx,ry,rz]=coursePoint(r.x,r.y,r.z);
     const kind=r.pilot ?? (pilotIndex+r.i)%heads.length, kit=heads[kind],suit=costumes[r.i];
     const time=mode==='dock'?dockTime:obstacleTime, speed=Math.hypot(r.vx,r.vz);
     const motion=clamp(speed/7,0,1), gait=r.ground?Math.sin(r.stride)*motion:0;
@@ -1874,13 +1897,13 @@ function run() {
     const dive=clamp(r.dive*8,0,1), idle=Math.sin(time*2.8+r.i);
     const bank=clamp((r.bank||0)*-.14+gait*.054+Math.sin(time*18+r.i)*stun*.28,-.5,.5);
     const pitch=-dive*1.21+stun*.65-motion*.105-.16*crouch;
-    const sc=(online?r===player:r.i===0)?1.15:1.08, yaw=r.a, co=Math.cos(yaw), si=Math.sin(yaw);
+    const sc=(online?r===player:r.i===0)?1.15:1.08, yaw=r.a+(atFarol?farol.yaw(r.z):0), co=Math.cos(yaw), si=Math.sin(yaw);
     const bob=(1-Math.cos(r.stride*2))*.034*motion*(1-air)-.115*crouch+.014*idle*(1-motion);
     // Forward kinematics: each distal segment starts at its parent's rotated endpoint.
     function limb(model,x,y,z,bend=0,twist=0,roll=0,scaleY=1){
       const Y=y-.61, cb=Math.cos(bank),sb=Math.sin(bank),ct=Math.cos(pitch),st=Math.sin(pitch);
       const dx=cb*x-sb*Y,hy=sb*x+cb*Y,dy=ct*hy+st*z+.61+bob,dz=ct*z-st*hy;
-      draw(model,r.x+(co*dx+si*dz)*sc,r.y+dy*sc,r.z+(-si*dx+co*dz)*sc,sc,sc*scaleY,sc,suit,yaw+twist,pitch+bend,0,1,bank+roll);
+      draw(model,rx+(co*dx+si*dz)*sc,ry+dy*sc,rz+(-si*dx+co*dz)*sc,sc,sc*scaleY,sc,suit,yaw+twist,pitch+bend,0,1,bank+roll);
     }
     const hip=.510,hipLift=air*.055;
     for(const sign of [-1,1]){
@@ -1912,9 +1935,9 @@ function run() {
     if(kit.frills)limb(kit.frills,0,hy,.018,nod+Math.sin(time*5+r.i)*.06,look,-bank*.42);
     if(r.boost>0||r.flight>0)for(const s of [-1,1]){
       const x=s*.23,z=-.27;
-      draw(ball,r.x+co*x+si*z,r.y+.45,r.z-si*x+co*z,.12,.28+Math.sin(time*28)*.06,.15,'mint',yaw,-.65,2);
+      draw(ball,rx+co*x+si*z,ry+.45,rz-si*x+co*z,.12,.28+Math.sin(time*28)*.06,.15,'mint',yaw,-.65,2);
     }
-    if(r===player&&mode!=='dock')draw(drum,r.x,r.y+2.45+idle*.042,r.z,.16,.065,.16,'lime',0,0,2);
+    if(r===player&&mode!=='dock')draw(drum,rx,ry+2.45+idle*.042,rz,.16,.065,.16,'lime',0,0,2);
   }
   // Sliding obstacle: the crab shell rides on a toothed carriage. Fingers rotate on separate pivots.
   const machineShell=loft([[0,-.40,.03,.34,.29],[0,-.30,.04,.73,.41],[0,-.09,.02,.97,.51],
@@ -2079,8 +2102,10 @@ function run() {
     const distance=portrait?8.55:6.95;
     const impact=(player.landing||0)*1.05;
     const inspectionLift=inDock?(lineup[0].y-.185)*.65:0;
-    const position=inDock?[.44,1.78+inspectionLift,4.5-(portrait?4.05:3.62),0,1.22+inspectionLift,4.5]:[xFollow*.82+Math.sin(orbit)*distance,3.65+height-swing*.95-impact,
-      zFollow-Math.cos(orbit)*distance,xFollow*.96+.13*player.vx,1.04+height,zFollow+5.85*(1.-swing)];
+    const position=inDock?[.44,1.78+inspectionLift,4.5-(portrait?4.05:3.62),0,1.22+inspectionLift,4.5]:
+      [...coursePoint(xFollow*.82+Math.sin(orbit)*distance+(atFarol?12*swing:0),
+        3.65+height-impact+swing*(atFarol?8:-.95),zFollow-Math.cos(orbit)*distance),
+       ...coursePoint(xFollow*.96+.13*player.vx-(atFarol?8*swing:0),1.04+height+(atFarol?5*swing:0),zFollow+5.85*(1.-swing))];
     const alpha=camera.ready?1-Math.exp(-dt*10):1;
     camera.ready=true;
     ['x','y','z','tx','ty','tz'].forEach((key,i)=>camera[key]=mix(camera[key],position[i],alpha));
@@ -2096,21 +2121,24 @@ function run() {
     gl.uniform3fv(u.side,s);
     gl.uniform3fv(u.up,up);
     gl.uniform1f(u.tide,obstacleTime);
+    const seaLevel=atFarol?farol.water(obstacleTime):-3.4;
+    gl.uniform1f(u.seaLevel,seaLevel);
     gl.uniform2f(u.viewportSize,canvas.width,canvas.height);
     const stamp=performance.now();
     samplers(dummy.texture,dummy.texture);
     if(shadowMap.ready && (stamp-shadowAt>(software?160:48) || shadowAt<0)){
       shadowAt=stamp;
-      gl.uniform2f(u.shadowCenter,Math.round(px*4)/4,Math.round((pz+12)*4)/4);
+      const [sx,,sz]=coursePoint(px,0,pz+12);
+      gl.uniform2f(u.shadowCenter,Math.round(sx*4)/4,Math.round(sz*4)/4);
       beginTarget(shadowMap,1,1);
-      for(const batch of fixedScene)if(batch.far>pz-31&&batch.near<pz+53)draw(...batch);
+      for(const batch of fixedScene)if(atFarol || (batch.far>pz-31&&batch.near<pz+53))draw(...batch);
       drawFestival(obstacleTime);drawObstacles(obstacleTime);
       if(inDock)drawPodium();
       for(const r of lineup) if(Math.abs(r.z-pz)<(software?20:46))drawRacer(r);
     }
     if(reflection.ready && (stamp-mirrorAt>(qualityMode==='light'?480:software?280:90) || mirrorAt<0)){
       mirrorAt=stamp;beginTarget(reflection,2,0);
-      for(const batch of fixedScene)if(batch.far>pz-18||swing>.15)draw(...batch);
+      for(const batch of fixedScene)if(atFarol||batch.far>pz-18||swing>.15)draw(...batch);
       drawFestival(obstacleTime);drawObstacles(obstacleTime);
     }
     gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,canvas.width,canvas.height);
@@ -2120,21 +2148,22 @@ function run() {
     gl.uniform1f(u.passKind,3);gl.depthMask(false);
     draw(plane,0,0,0,1,1,1,'white');
     gl.depthMask(true);gl.uniform1f(u.passKind,0);
-    draw(plane,x,-3.4,z,750,1,750,'ocean',0,0,1);
-    for(const batch of fixedScene)if(batch.far>pz-18||swing>.15)draw(...batch);
+    draw(plane,x,seaLevel,z,750,1,750,'ocean',0,0,1);
+    for(const batch of fixedScene)if(atFarol||batch.far>pz-18||swing>.15)draw(...batch);
     drawFestival(obstacleTime);drawObstacles(obstacleTime);
     if(inDock)drawPodium();
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
     gl.depthMask(false);
+    if(atFarol)farol.drawLight(obstacleTime);
     for(const r of lineup) if(!r.left&&r.wait<=0&&floor(r.x,r.z)) {
       const size=.88+Math.max(0,r.y)*.12;
-      draw(drum,r.x,.033,r.z,1.12*size,.008,.88*size,'navy',0,0,2,.29/(1+Math.max(0,r.y)));
+      draw(drum,...coursePoint(r.x,.033,r.z),1.12*size,.008,.88*size,'navy',0,0,2,.29/(1+Math.max(0,r.y)));
     }
     gl.depthMask(true);
     gl.disable(gl.BLEND);
     for(const r of lineup) drawRacer(r);
-    for(const p of particles) draw(ball,p.x,p.y,p.z,p.trail?.15:.12,.12,p.trail?.5:.12,p.trail?'gold':'mint',0,0,2);
+    for(const p of particles) draw(ball,...coursePoint(p.x,p.y,p.z),p.trail?.15:.12,.12,p.trail?.5:.12,p.trail?'gold':'mint',0,0,2);
   }
 
   function snapshot() {
@@ -2196,7 +2225,7 @@ function run() {
       const lead=mode==='race' && !r.result && !r.wait?Math.min(.07,online.age):0;
       const alpha=1-Math.exp(-30*dt);
       r.x=mix(r.x,r.target.x+r.vx*lead,alpha);
-      r.z=mix(r.z,r.target.z+r.vz*lead,alpha);
+      r.z=mix(r.z,r.target.z+r.vz*lead*(atFarol?farol.distanceScale(r.target.x,r.target.z):1),alpha);
       r.y=mix(r.y,r.target.y+r.vy*lead,alpha);
     }
   }

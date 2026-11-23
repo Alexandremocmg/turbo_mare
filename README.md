@@ -19,9 +19,11 @@ Para instalar, abra o link no Chrome ou Edge e use **Instalar jogo** quando apar
 
 ### Copa das Marés
 
-Em **Jogar com amigos**, crie uma sala, compartilhe o convite e selecione **Largar na Baía**. A primeira prova é a Baía do Kraken. O placar aparece na chegada e a segunda prova começa automaticamente após dez segundos. No Estaleiro à Deriva, desvie das cargas em movimento e escolha entre o cais estreito e o atalho pelo contêiner suspenso.
+Em **Jogar com amigos**, crie uma sala, compartilhe o convite e selecione **Largar na Baía**. A Copa começa na Baía do Kraken. No Estaleiro à Deriva, desvie das cargas em movimento e escolha entre o cais e o contêiner suspenso. Há dez segundos de placar entre cada prova.
 
-Cada prova distribui **10, 8, 6, 4, 2 e 1 ponto** por colocação. Quem cruza a linha fica à frente. Ao fim dos 90 segundos, os pilotos que ainda correm e alcançaram um checkpoint também pontuam, em ordem de progresso. A maior soma vence. Em caso de empate, vale a pontuação do Estaleiro. Se o empate persistir, a colocação é compartilhada. No pódio, **Revanche** inicia outra copa com o mesmo convite e o placar zerado.
+O **Farol da Ressaca** fecha a Copa. No sopé do farol, duas passagens de pedra pelo lado de dentro ficam expostas na maré baixa. As luzes verdes e o contador indicam quando dá para cortar caminho pelos anéis. Na maré alta, siga pela pista principal. Depois das pedras, a rampa faz uma volta completa em subida até a galeria da lanterna.
+
+Cada prova distribui **10, 8, 6, 4, 2 e 1 ponto** por colocação. Quem cruza a linha fica à frente. Ao fim dos 90 segundos, os pilotos que ainda correm e alcançaram um checkpoint também pontuam, em ordem de progresso. A maior soma vence. Em caso de empate, vale a pontuação do Farol. Se o empate persistir, a colocação é compartilhada. No pódio, **Revanche** inicia outra copa com o mesmo convite e o placar zerado.
 
 | Ação | Computador | Tela de toque |
 | --- | --- | --- |

@@ -90,6 +90,26 @@ async function main() {
 
   await send('Runtime.enable');
   await send('Page.enable');
+  if(process.argv[2]==='--farol'){
+    await send('Emulation.setDeviceMetricsOverride',{width:900,height:540,deviceScaleFactor:1,mobile:false});
+    await send('Page.addScriptToEvaluateOnNewDocument',{source:`
+      Object.defineProperty(window,'createTurboRoom',{set(factory){
+        Object.defineProperty(window,'createTurboRoom',{value:game=>{window.qaFarol=game;return factory(game);}});
+      },configurable:true});`});
+    await send('Page.navigate',{url:pathToFileURL(path.join(root,'index.html')).href});
+    await until("!!window.qaFarol && document.getElementById('bay-art')?.naturalWidth>0");
+    await evaluate("qaFarol.begin({host:true,slot:0,leaderSlot:0,track:'farol',heats:3,members:[{uid:'host',slot:0,name:'Coral',pilot:0}]})");
+    await screenshot('farol-largada');
+    await until(racing);
+    await key('keyDown','KeyW','w',87);
+    await until("parseInt(document.getElementById('percent').textContent)>=39");
+    await key('keyUp','KeyW','w',87);
+    await screenshot('farol-espiral');
+    assert.equal(await evaluate("document.querySelector('canvas').getContext('webgl').getError()"),0);
+    assert.deepEqual(errors,[]);
+    console.log('Largada e subida do Farol renderizadas em WebGL.');
+    return;
+  }
   if (['--host','--guest','--friend'].includes(process.argv[2])) {
     await require('./salas.cjs').verify({send,evaluate,until,click,key,screenshot});
     assert.deepEqual(errors,[]);
