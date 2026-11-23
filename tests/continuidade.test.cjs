@@ -4,7 +4,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 const {webcrypto}=require('node:crypto');
-const source=fs.readFileSync(path.join(__dirname,'../src/rooms.js'),'utf8');
+const source=['cup.js','rooms.js'].map(file=>fs.readFileSync(path.join(__dirname,'../src',file),'utf8')).join('\n');
 
 // Model the ordered, echoed relay stream. A suspended tab queues incoming messages.
 function relay() {

@@ -13,7 +13,7 @@ function substitute(marker, contents) {
 }
 
 substitute('<link rel="stylesheet" href="game.css">', '<style>\n' + read('game.css') + '</style>');
-for (const file of ['rooms.js', 'farol.js', 'game.js']) {
+for (const file of ['cup.js', 'rooms.js', 'farol.js', 'game.js']) {
   substitute('<script src="' + file + '"></script>', '<script>\n' + read(file) + '</script>');
 }
 substitute('<!-- PWA: head -->', [

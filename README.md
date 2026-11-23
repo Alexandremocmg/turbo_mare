@@ -20,6 +20,8 @@ Para instalar, abra o link no Chrome ou Edge e use **Instalar jogo** quando apar
 
 ### Copa das Marés
 
+Escolha **Copa offline** para disputar as três pistas contra cinco bots. Entre as provas, confira a pontuação acumulada e selecione **Próxima prova** quando quiser largar. Depois do pódio, **Revanche** reinicia o campeonato. O jogo funciona offline no navegador após salvar o PWA ou abrir o HTML portátil.
+
 Em **Jogar com amigos**, crie uma sala, compartilhe o convite e selecione **Largar na Baía**. A Copa começa na Baía do Kraken. No Estaleiro à Deriva, desvie das cargas em movimento e escolha entre o cais e o contêiner suspenso. Há dez segundos de placar entre cada prova.
 
 O **Farol da Ressaca** fecha a Copa. No sopé do farol, duas passagens de pedra pelo lado de dentro ficam expostas na maré baixa. As luzes verdes e o contador indicam quando dá para cortar caminho pelos anéis. Na maré alta, siga pela pista principal. Depois das pedras, a rampa faz uma volta completa em subida até a galeria da lanterna.

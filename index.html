@@ -42,6 +42,11 @@ button:focus-visible{outline:3px solid #fff;outline-offset:4px}
 #cup-board tr>:first-child{text-align:left;overflow-wrap:anywhere}
 #cup-board tbody tr:first-child{color:#ffe6a0}
 #cup-board tbody td:last-child{font-weight:800}
+.offline-board{width:100%;border-collapse:collapse;margin:4px 0 13px;font-size:.81rem;font-variant-numeric:tabular-nums}
+.offline-board :is(td,th){padding:4px;text-align:right;border-bottom:1px solid #91d9c936}
+.offline-board tr>:first-child{text-align:left}
+.offline-board tr:first-child th,.offline-board td:last-child{color:#ffe6a0}
+#modal .card{max-height:calc(100dvh - 28px);overflow-y:auto}
 #cup-rules{margin:12px 0 16px;color:#beded5;font-size:13px}
 #cup-rules summary{cursor:pointer}
 #cup-leg{color:#ffe6a0;margin-right:.45em}
@@ -188,7 +193,7 @@ body[data-turbo="on"] #hud::before{opacity:1}
     <div class="eyebrow">Circuito do Kraken</div>
     <h1>TURBO<span>MARÉ</span></h1>
     <p>Pegue os anéis de turbo e escape dos tentáculos para chegar entre os seis primeiros.</p>
-    <div class="menu-buttons"><button class="primary" id="play">Disputar corrida <span aria-hidden="true">▶</span></button><button id="quick">Partida rápida</button><button id="friends">Jogar com amigos</button><button id="practice">Treino livre</button><button id="crew-open">Pilotos</button></div>
+    <div class="menu-buttons"><button class="primary" id="play">Disputar corrida <span aria-hidden="true">▶</span></button><button class="secondary" id="offline-cup">Copa offline</button><button id="quick">Partida rápida</button><button id="friends">Jogar com amigos</button><button id="practice">Treino livre</button><button id="crew-open">Pilotos</button></div>
     <div class="menu-foot"><span><kbd>WASD</kbd> ou setas</span><span><kbd>Espaço</kbd> Pular</span><span><kbd>Shift</kbd> Mergulhar</span></div>
     <div class="app-tools"><button type="button" id="install-game" aria-controls="install-help" hidden>Instalar jogo</button><span id="offline-state" role="status" hidden>Pronto para jogar offline</span></div>
     <div id="install-help" hidden>No Safari, toque em Compartilhar e depois em Adicionar à Tela de Início.</div>
@@ -243,6 +248,7 @@ body[data-turbo="on"] #hud::before{opacity:1}
     <div class="eyebrow" id="modal-tag">Circuito do Kraken</div>
     <h2 id="modal-title"></h2>
     <p id="modal-text"></p>
+    <table class="offline-board" id="offline-board" hidden aria-label="Pontuação acumulada da Copa"><thead><tr><th scope="col">Piloto</th><th scope="col">Baía</th><th scope="col">Estaleiro</th><th scope="col">Farol</th><th scope="col">Total</th></tr></thead><tbody id="offline-rows"></tbody></table>
     <label id="quality-row" for="quality">Detalhe gráfico <select id="quality"><option value="auto">Automático</option><option value="high">Alto</option><option value="light">Leve</option></select></label>
     <div class="card-actions">
       <button class="primary" id="modal-main"></button>
@@ -318,6 +324,29 @@ body[data-turbo="on"] #hud::before{opacity:1}
 <script>
 'use strict';
 
+const cupTracks=['baia','estaleiro','farol'];
+const cupPrizes=[10,8,6,4,2,1];
+const cupTotal=row=>row.scores.reduce((sum,value)=>sum+(value||0),0);
+
+function compareCupScores(a,b){
+  return cupTotal(b)-cupTotal(a)||(b.scores.at(-1)||0)-(a.scores.at(-1)||0);
+}
+
+function rankCup(board){
+  return board.slice().sort((a,b)=>compareCupScores(a,b)||a.slot-b.slot);
+}
+
+function scoreCupLeg(board,leg,rows){
+  const ranked=rows.filter(row=>row.eligible===true);
+  for(const pilot of board){
+    const place=ranked.findIndex(row=>row.slot===pilot.slot);
+    pilot.scores[leg]=cupPrizes[place]||0;
+  }
+}
+</script>
+<script>
+'use strict';
+
 window.createTurboRoom = function createTurboRoom(game) {
   const el = id => document.getElementById(id);
   const dialog = el('room');
@@ -326,8 +355,7 @@ window.createTurboRoom = function createTurboRoom(game) {
   const leaseMs = 5000;
   const uidPattern = /^[A-Za-z0-9_-]{4,32}$/;
   const active = () => ['lobby','race','interval','results'].includes(stage);
-  const prizes=[10,8,6,4,2,1], intervalMs=10000;
-  const tracks=['baia','estaleiro','farol'];
+  const intervalMs=10000;
   let cupVersion=0, heats=0;
   let cup=false, leg=0, board=[], nextStart=0;
   const controls = new Map();
@@ -358,12 +386,6 @@ window.createTurboRoom = function createTurboRoom(game) {
   function publish(message) { send({...message,term}); }
   function sync() { publish({t:'lobby',members}); }
   const member = uid => members.find(m=>m.uid===uid);
-  const total=r=>r.scores.reduce((sum,v)=>sum+(v||0),0);
-  const finalPoints=r=>r.scores[heats-1]||0;
-  const compareScores=(a,b)=>total(b)-total(a)||finalPoints(b)-finalPoints(a);
-  function rankBoard(){
-    return board.slice().sort((a,b)=>compareScores(a,b)||a.slot-b.slot);
-  }
   function paintBoard(){
     const visible=cup && ['interval','results'].includes(stage);
     el('cup-board').hidden=!visible;
@@ -371,12 +393,12 @@ window.createTurboRoom = function createTurboRoom(game) {
     el('cup-farol-column').hidden=heats!==3;
     if(!visible)return;
     let place=0, previous;
-    el('cup-rows').replaceChildren(...rankBoard().map((r,i)=>{
-      if(!previous || compareScores(r,previous)!==0)place=i+1;
+    el('cup-rows').replaceChildren(...rankCup(board).map((r,i)=>{
+      if(!previous || compareCupScores(r,previous)!==0)place=i+1;
       previous=r;
       const row=document.createElement('tr');
       const label=place+'º '+r.name+(r.uid===selfId?' (você)':'');
-      for(const [j,text] of [label,...r.scores.map(v=>v??'—'),total(r)].entries()){
+      for(const [j,text] of [label,...r.scores.map(v=>v??'—'),cupTotal(r)].entries()){
         const cell=document.createElement(j===0?'th':'td');
         if(j===0)cell.scope='row';
         cell.textContent=String(text);row.append(cell);
@@ -418,9 +440,9 @@ window.createTurboRoom = function createTurboRoom(game) {
     if (stage==='interval')updateInterval();
     if (done) {
       if(cup){
-        const first=rankBoard()[0];
-        const winners=first?board.filter(r=>compareScores(r,first)===0):[];
-        const win=first && total(first)>0?(winners.length===1?first.name+' venceu a Copa':winners.map(r=>r.name).join(' e ')+' dividiram a vitória')+' com '+total(first)+' pontos. ':'Nenhum piloto marcou pontos. ';
+        const first=rankCup(board)[0];
+        const winners=first?board.filter(r=>compareCupScores(r,first)===0):[];
+        const win=first && cupTotal(first)>0?(winners.length===1?first.name+' venceu a Copa':winners.map(r=>r.name).join(' e ')+' dividiram a vitória')+' com '+cupTotal(first)+' pontos. ':'Nenhum piloto marcou pontos. ';
         note(win+(host?'Dispute a revanche com o mesmo convite.':'Aguarde a revanche nesta sala.'));
       } else if(quick) note(host ? 'Dispute outra corrida com os mesmos pilotos ou saia para procurar novos.' : 'Aguarde a próxima corrida ou saia para procurar outros pilotos.');
       else note(host ? 'Convide outros pilotos ou dispute uma nova corrida.' : 'Aguarde o anfitrião iniciar uma nova corrida.');
@@ -557,16 +579,12 @@ window.createTurboRoom = function createTurboRoom(game) {
     controls.clear(); latest=null; pendingStart=pendingEnd=false; stage = 'race'; standings = [];
     if (dialog.open) dialog.close();
     game.begin({host,slot,leaderSlot:legacy?0:member(hostId).slot,members:members.map(m=>({...m})),
-      track:cup?tracks[leg]:null,heats,bots});
+      track:cup?cupTracks[leg]:null,heats,bots});
   }
   function result(rows) {
     stage = 'results'; standings = rows; latest=null; pendingStart=pendingEnd=false;
     if(cup){
-      const ranked=rows.filter(row=>row.eligible===true);
-      for(const r of board){
-        const i=ranked.findIndex(row=>row.slot===r.slot);
-        r.scores[leg]=i>=0?prizes[i]:0;
-      }
+      scoreCupLeg(board,leg,rows);
       if(leg+1<heats){stage='interval';nextStart=performance.now()+intervalMs;}
     }
     game.reset(); modal(); paint();
@@ -583,7 +601,7 @@ window.createTurboRoom = function createTurboRoom(game) {
       if(cup && Array.isArray(m.board) && m.board.length<=limit && m.board.length &&
         m.board.every(r=>r && typeof r.name==='string' && uidPattern.test(r.uid) &&
           Number.isInteger(r.slot) && Array.isArray(r.scores) && r.scores.length===heats &&
-          r.scores.every(v=>v===0||prizes.includes(v)))){
+          r.scores.every(v=>v===0||cupPrizes.includes(v)))){
         board=m.board;stage='results';leg=heats-1;
       }
       heard(stamp);paint();return;
@@ -1991,13 +2009,16 @@ function run() {
   const timeResult = (time) => time.toFixed(2).replace('.',',')+' s';
 
   let training=false, beatIndex=-1, online=null, room=null, lastNetSend=0, rankSignature='';
+  let offlineCup=null;
   const botNames=['Bot Coral','Bot Recife','Bot Âncora','Bot Farol'];
+  const cupPilots=['Você',...botNames,'Bot Brisa'];
   const netFields=['x','y','z','vx','vy','vz','a','stride','bank','landing','hit','stun','dive','flight','boost','wait','cp','result','raceTime','falls'];
   function freshRace() {
-    selectTrack(online?.track);
+    const track=online?.track ?? (offlineCup && cupTracks[offlineCup.leg]);
+    selectTrack(track);
     const heat=(atFarol?3:shipyard?2:1)+'/'+(online?.heats||3);
-    $('progress-name').textContent=online?.track?heat+' · '+(atFarol?'Farol da Ressaca':shipyard?'Estaleiro à Deriva':'Baía do Kraken'):'Circuito do Kraken';
-    $('cup-leg').hidden=!online?.track;
+    $('progress-name').textContent=track?heat+' · '+(atFarol?'Farol da Ressaca':shipyard?'Estaleiro à Deriva':'Baía do Kraken'):'Circuito do Kraken';
+    $('cup-leg').hidden=!track;
     $('cup-leg').textContent=heat;
     seed = 9137;
     const grid = [[0,4.5],[-3.8,5.7],[3.8,5.7],[-1.85,5.3],[1.85,5.35],
@@ -2009,6 +2030,10 @@ function run() {
       error:random(), nextJump:0,flight:0,boost:0,gates:new Set(),springLock:0
     }));
     if(training) racers=racers.slice(0,1);
+    if(offlineCup){
+      racers=racers.slice(0,cupPilots.length);
+      racers.forEach((r,i)=>{r.name=cupPilots[i];r.left=false;});
+    }
     if (online) {
       // Na partida rápida, os lugares 7 a 10 do grid são bots simulados pelo anfitrião.
       racers = racers.filter(r=>online.members.some(m=>m.slot===r.i) || (online.bots && r.i>=6));
@@ -2040,10 +2065,11 @@ function run() {
     $('menu').hidden=next!=='menu';
     $('hud').hidden=next==='menu'||next==='dock';
     $('dock').hidden=next!=='dock';
-    $('room-ranks').hidden=!online || !['race','countdown'].includes(next);
+    $('room-ranks').hidden=(!online&&!offlineCup) || !['race','countdown'].includes(next);
     $('touch').hidden=next!=='race';
     $('pause').disabled=!['countdown','race'].includes(next);
     $('modal').hidden=!['paused','result'].includes(next);
+    $('offline-board').hidden=!offlineCup || next!=='result';
     if(next!=='countdown' && next!=='race') $('count').hidden=true;
   }
   function startRace() {
@@ -2055,6 +2081,7 @@ function run() {
     $('world').focus();
   }
   function showMenu() {
+    offlineCup=null;
     freshRace();
     clearControls();
     camera.ready=false;
@@ -2078,13 +2105,56 @@ function run() {
       resumeMode=mode;
       clearControls();
       setMode('paused');
-      $('modal-tag').textContent='Circuito do Kraken';
+      $('modal-tag').textContent=offlineCup?'Copa das Marés · Offline':'Circuito do Kraken';
       $('modal-title').textContent='Em pausa';
       $('modal-text').textContent='Volte à corrida quando quiser.';
       $('modal-main').textContent='Continuar';
       $('modal-restart').hidden=false;
       $('modal-main').focus();
     }
+  }
+  function startOfflineCup() {
+    training=false;
+    offlineCup={leg:0,board:cupPilots.map((name,slot)=>({name,slot,scores:cupTracks.map(()=>null)}))};
+    startRace();
+  }
+  function finishOfflineLeg() {
+    const {leg,board}=offlineCup;
+    scoreCupLeg(board,leg,raceResults());
+    const final=leg===cupTracks.length-1;
+    const ranked=rankCup(board);
+    const first=ranked[0];
+    let place=0;
+    $('offline-rows').replaceChildren(...ranked.map((row,i)=>{
+      if(i===0 || compareCupScores(row,ranked[i-1])!==0)place=i+1;
+      const tr=document.createElement('tr');
+      [place+'º '+row.name,...row.scores.map(value=>value??'—'),cupTotal(row)].forEach((value,j)=>{
+        const cell=document.createElement(j===0?'th':'td');
+        if(j===0)cell.scope='row';
+        cell.textContent=value;tr.append(cell);
+      });
+      return tr;
+    }));
+    const playerScore=board[0].scores[leg];
+    const winners=ranked.filter(row=>compareCupScores(first,row)===0);
+    setMode('result');
+    clearControls();
+    $('modal-tag').textContent='Copa das Marés · Offline';
+    $('modal-title').textContent=final?'Pódio da Copa':(leg===0?'Placar após a Baía':'Placar após o Estaleiro');
+    $('modal-text').textContent=final?
+      (winners.length>1?'Vitória compartilhada · '+winners.map(row=>row.name).join(', ')+'.':
+        first.slot===0?'Você venceu a Copa com '+cupTotal(first)+' pontos!':first.name+' venceu a Copa com '+cupTotal(first)+' pontos.'):
+      'Você marcou '+playerScore+' '+(playerScore===1?'ponto':'pontos')+'. Próxima prova: '+(leg===0?'Estaleiro à Deriva.':'Farol da Ressaca.');
+    $('modal-main').textContent=final?'Revanche':'Próxima prova';
+    $('modal-restart').hidden=true;
+    $('modal-main').focus();
+  }
+  function advanceResult() {
+    if(mode==='paused'){pauseRace();return;}
+    if(!offlineCup){startRace();return;}
+    if(offlineCup.leg===cupTracks.length-1){startOfflineCup();return;}
+    offlineCup.leg++;
+    startRace();
   }
   function finishRace(success) {
     setMode('result');
@@ -2155,9 +2225,10 @@ function run() {
     if(!muted) {unlockSound();tone(450,.15,'triangle');}
   });
   $('play').addEventListener('click',()=>{training=false;startRace();});
+  $('offline-cup').addEventListener('click',startOfflineCup);
   $('practice').addEventListener('click',()=>{training=true;startRace();});
   $('pause').addEventListener('click',pauseRace);
-  $('modal-main').addEventListener('click',()=>mode==='paused'?pauseRace():startRace());
+  $('modal-main').addEventListener('click',advanceResult);
   $('modal-restart').addEventListener('click',startRace);
   $('modal-menu').addEventListener('click',showMenu);
   $('world').tabIndex=-1;
@@ -2287,6 +2358,14 @@ function run() {
     let lane = r.bias;
     let jump=false, dive=false;
     if(elapsed<r.reaction) return [0,0,false,false];
+    if(shipyard){
+      const route=r.z<55?-5.95+(r.i%3-1)*.5:r.z<69?0:2.9+(r.i%3-1)*.53;
+      return [clamp((route-r.x)*1.1,-.86,.86),1,r.ground&&r.z>87.7&&r.z<89&&r.nextJump<=0,false];
+    }
+    if(atFarol){
+      const route=.06+(r.i%5)*.15;
+      return [clamp((route-r.x)*1.2,-.75,.75),1,false,false];
+    }
     if(r.z>37 && r.z<76) lane=r.lane;
     if(r.z>122) lane=clamp(r.bias,-5.6,5.6);
     lane+=Math.sin(r.z*.25+r.i)*.38;
@@ -2518,10 +2597,10 @@ function run() {
     $('percent').textContent=percent+'%';
     $('fill').style.width=percent+'%';
     $('time').textContent=training?format(elapsed):format(Math.ceil(Math.max(0,TIME_LIMIT-elapsed)));
-    if (online) {
+    if (online || offlineCup) {
       $('slots').previousElementSibling.textContent='Chegada';
       $('slots').textContent=finishers.length+' / '+racers.filter(r=>!r.left || r.result).length;
-      const labels=roomOrder().map((r,i)=>(i+1)+'º  '+r.name+(r===player?' (você)':'')+' · '+roomScore(r)+(r.i===online.leaderSlot?' · Anfitrião':''));
+      const labels=roomOrder().map((r,i)=>(i+1)+'º  '+r.name+(online&&r===player?' (você)':'')+' · '+roomScore(r)+(r.i===online?.leaderSlot?' · Anfitrião':''));
       const signature=JSON.stringify(labels);
       if(signature!==rankSignature) {
         rankSignature=signature;
@@ -2534,6 +2613,9 @@ function run() {
   }
   function roomOrder() {
     return racers.slice().sort((a,b)=>(a.result||999)-(b.result||999)||Number(a.left)-Number(b.left)||progressOf(b)-progressOf(a)||a.i-b.i);
+  }
+  function raceResults() {
+    return roomOrder().map(r=>({name:r.name,slot:r.i,score:roomScore(r),eligible:!!r.result||(!r.left&&r.cp>0)}));
   }
   function roomScore(r) {
     if(r.result) return r.result+'º · '+timeResult(r.raceTime);
@@ -2593,10 +2675,14 @@ function run() {
       notify(matchMedia('(pointer:coarse)').matches?'Pule para atravessar o vão':'Espaço para atravessar o vão');
     }
     if (online && (racers.every(r=>r.result||r.left||r.bot) || elapsed>=TIME_LIMIT)) {
-      room.finish(roomOrder().map(r=>({name:r.name,slot:r.i,score:roomScore(r),eligible:!!r.result||(!r.left&&r.cp>0)})));
+      room.finish(raceResults());
       return;
     }
-    if(!online && (player.result||finishers.length>=QUALIFY||(!training && elapsed>=TIME_LIMIT))) {
+    if(offlineCup && (racers.every(r=>r.result) || elapsed>=TIME_LIMIT)){
+      finishOfflineLeg();
+      return;
+    }
+    if(!online && !offlineCup && (player.result||finishers.length>=QUALIFY||(!training && elapsed>=TIME_LIMIT))) {
       updateHUD();
       finishRace(player.result>0 && player.result<=QUALIFY);
       return;

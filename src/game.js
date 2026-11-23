@@ -1031,13 +1031,16 @@ function run() {
   const timeResult = (time) => time.toFixed(2).replace('.',',')+' s';
 
   let training=false, beatIndex=-1, online=null, room=null, lastNetSend=0, rankSignature='';
+  let offlineCup=null;
   const botNames=['Bot Coral','Bot Recife','Bot Âncora','Bot Farol'];
+  const cupPilots=['Você',...botNames,'Bot Brisa'];
   const netFields=['x','y','z','vx','vy','vz','a','stride','bank','landing','hit','stun','dive','flight','boost','wait','cp','result','raceTime','falls'];
   function freshRace() {
-    selectTrack(online?.track);
+    const track=online?.track ?? (offlineCup && cupTracks[offlineCup.leg]);
+    selectTrack(track);
     const heat=(atFarol?3:shipyard?2:1)+'/'+(online?.heats||3);
-    $('progress-name').textContent=online?.track?heat+' · '+(atFarol?'Farol da Ressaca':shipyard?'Estaleiro à Deriva':'Baía do Kraken'):'Circuito do Kraken';
-    $('cup-leg').hidden=!online?.track;
+    $('progress-name').textContent=track?heat+' · '+(atFarol?'Farol da Ressaca':shipyard?'Estaleiro à Deriva':'Baía do Kraken'):'Circuito do Kraken';
+    $('cup-leg').hidden=!track;
     $('cup-leg').textContent=heat;
     seed = 9137;
     const grid = [[0,4.5],[-3.8,5.7],[3.8,5.7],[-1.85,5.3],[1.85,5.35],
@@ -1049,6 +1052,10 @@ function run() {
       error:random(), nextJump:0,flight:0,boost:0,gates:new Set(),springLock:0
     }));
     if(training) racers=racers.slice(0,1);
+    if(offlineCup){
+      racers=racers.slice(0,cupPilots.length);
+      racers.forEach((r,i)=>{r.name=cupPilots[i];r.left=false;});
+    }
     if (online) {
       // Na partida rápida, os lugares 7 a 10 do grid são bots simulados pelo anfitrião.
       racers = racers.filter(r=>online.members.some(m=>m.slot===r.i) || (online.bots && r.i>=6));
@@ -1080,10 +1087,11 @@ function run() {
     $('menu').hidden=next!=='menu';
     $('hud').hidden=next==='menu'||next==='dock';
     $('dock').hidden=next!=='dock';
-    $('room-ranks').hidden=!online || !['race','countdown'].includes(next);
+    $('room-ranks').hidden=(!online&&!offlineCup) || !['race','countdown'].includes(next);
     $('touch').hidden=next!=='race';
     $('pause').disabled=!['countdown','race'].includes(next);
     $('modal').hidden=!['paused','result'].includes(next);
+    $('offline-board').hidden=!offlineCup || next!=='result';
     if(next!=='countdown' && next!=='race') $('count').hidden=true;
   }
   function startRace() {
@@ -1095,6 +1103,7 @@ function run() {
     $('world').focus();
   }
   function showMenu() {
+    offlineCup=null;
     freshRace();
     clearControls();
     camera.ready=false;
@@ -1118,13 +1127,56 @@ function run() {
       resumeMode=mode;
       clearControls();
       setMode('paused');
-      $('modal-tag').textContent='Circuito do Kraken';
+      $('modal-tag').textContent=offlineCup?'Copa das Marés · Offline':'Circuito do Kraken';
       $('modal-title').textContent='Em pausa';
       $('modal-text').textContent='Volte à corrida quando quiser.';
       $('modal-main').textContent='Continuar';
       $('modal-restart').hidden=false;
       $('modal-main').focus();
     }
+  }
+  function startOfflineCup() {
+    training=false;
+    offlineCup={leg:0,board:cupPilots.map((name,slot)=>({name,slot,scores:cupTracks.map(()=>null)}))};
+    startRace();
+  }
+  function finishOfflineLeg() {
+    const {leg,board}=offlineCup;
+    scoreCupLeg(board,leg,raceResults());
+    const final=leg===cupTracks.length-1;
+    const ranked=rankCup(board);
+    const first=ranked[0];
+    let place=0;
+    $('offline-rows').replaceChildren(...ranked.map((row,i)=>{
+      if(i===0 || compareCupScores(row,ranked[i-1])!==0)place=i+1;
+      const tr=document.createElement('tr');
+      [place+'º '+row.name,...row.scores.map(value=>value??'—'),cupTotal(row)].forEach((value,j)=>{
+        const cell=document.createElement(j===0?'th':'td');
+        if(j===0)cell.scope='row';
+        cell.textContent=value;tr.append(cell);
+      });
+      return tr;
+    }));
+    const playerScore=board[0].scores[leg];
+    const winners=ranked.filter(row=>compareCupScores(first,row)===0);
+    setMode('result');
+    clearControls();
+    $('modal-tag').textContent='Copa das Marés · Offline';
+    $('modal-title').textContent=final?'Pódio da Copa':(leg===0?'Placar após a Baía':'Placar após o Estaleiro');
+    $('modal-text').textContent=final?
+      (winners.length>1?'Vitória compartilhada · '+winners.map(row=>row.name).join(', ')+'.':
+        first.slot===0?'Você venceu a Copa com '+cupTotal(first)+' pontos!':first.name+' venceu a Copa com '+cupTotal(first)+' pontos.'):
+      'Você marcou '+playerScore+' '+(playerScore===1?'ponto':'pontos')+'. Próxima prova: '+(leg===0?'Estaleiro à Deriva.':'Farol da Ressaca.');
+    $('modal-main').textContent=final?'Revanche':'Próxima prova';
+    $('modal-restart').hidden=true;
+    $('modal-main').focus();
+  }
+  function advanceResult() {
+    if(mode==='paused'){pauseRace();return;}
+    if(!offlineCup){startRace();return;}
+    if(offlineCup.leg===cupTracks.length-1){startOfflineCup();return;}
+    offlineCup.leg++;
+    startRace();
   }
   function finishRace(success) {
     setMode('result');
@@ -1195,9 +1247,10 @@ function run() {
     if(!muted) {unlockSound();tone(450,.15,'triangle');}
   });
   $('play').addEventListener('click',()=>{training=false;startRace();});
+  $('offline-cup').addEventListener('click',startOfflineCup);
   $('practice').addEventListener('click',()=>{training=true;startRace();});
   $('pause').addEventListener('click',pauseRace);
-  $('modal-main').addEventListener('click',()=>mode==='paused'?pauseRace():startRace());
+  $('modal-main').addEventListener('click',advanceResult);
   $('modal-restart').addEventListener('click',startRace);
   $('modal-menu').addEventListener('click',showMenu);
   $('world').tabIndex=-1;
@@ -1327,6 +1380,14 @@ function run() {
     let lane = r.bias;
     let jump=false, dive=false;
     if(elapsed<r.reaction) return [0,0,false,false];
+    if(shipyard){
+      const route=r.z<55?-5.95+(r.i%3-1)*.5:r.z<69?0:2.9+(r.i%3-1)*.53;
+      return [clamp((route-r.x)*1.1,-.86,.86),1,r.ground&&r.z>87.7&&r.z<89&&r.nextJump<=0,false];
+    }
+    if(atFarol){
+      const route=.06+(r.i%5)*.15;
+      return [clamp((route-r.x)*1.2,-.75,.75),1,false,false];
+    }
     if(r.z>37 && r.z<76) lane=r.lane;
     if(r.z>122) lane=clamp(r.bias,-5.6,5.6);
     lane+=Math.sin(r.z*.25+r.i)*.38;
@@ -1558,10 +1619,10 @@ function run() {
     $('percent').textContent=percent+'%';
     $('fill').style.width=percent+'%';
     $('time').textContent=training?format(elapsed):format(Math.ceil(Math.max(0,TIME_LIMIT-elapsed)));
-    if (online) {
+    if (online || offlineCup) {
       $('slots').previousElementSibling.textContent='Chegada';
       $('slots').textContent=finishers.length+' / '+racers.filter(r=>!r.left || r.result).length;
-      const labels=roomOrder().map((r,i)=>(i+1)+'º  '+r.name+(r===player?' (você)':'')+' · '+roomScore(r)+(r.i===online.leaderSlot?' · Anfitrião':''));
+      const labels=roomOrder().map((r,i)=>(i+1)+'º  '+r.name+(online&&r===player?' (você)':'')+' · '+roomScore(r)+(r.i===online?.leaderSlot?' · Anfitrião':''));
       const signature=JSON.stringify(labels);
       if(signature!==rankSignature) {
         rankSignature=signature;
@@ -1574,6 +1635,9 @@ function run() {
   }
   function roomOrder() {
     return racers.slice().sort((a,b)=>(a.result||999)-(b.result||999)||Number(a.left)-Number(b.left)||progressOf(b)-progressOf(a)||a.i-b.i);
+  }
+  function raceResults() {
+    return roomOrder().map(r=>({name:r.name,slot:r.i,score:roomScore(r),eligible:!!r.result||(!r.left&&r.cp>0)}));
   }
   function roomScore(r) {
     if(r.result) return r.result+'º · '+timeResult(r.raceTime);
@@ -1633,10 +1697,14 @@ function run() {
       notify(matchMedia('(pointer:coarse)').matches?'Pule para atravessar o vão':'Espaço para atravessar o vão');
     }
     if (online && (racers.every(r=>r.result||r.left||r.bot) || elapsed>=TIME_LIMIT)) {
-      room.finish(roomOrder().map(r=>({name:r.name,slot:r.i,score:roomScore(r),eligible:!!r.result||(!r.left&&r.cp>0)})));
+      room.finish(raceResults());
       return;
     }
-    if(!online && (player.result||finishers.length>=QUALIFY||(!training && elapsed>=TIME_LIMIT))) {
+    if(offlineCup && (racers.every(r=>r.result) || elapsed>=TIME_LIMIT)){
+      finishOfflineLeg();
+      return;
+    }
+    if(!online && !offlineCup && (player.result||finishers.length>=QUALIFY||(!training && elapsed>=TIME_LIMIT))) {
       updateHUD();
       finishRace(player.result>0 && player.result<=QUALIFY);
       return;

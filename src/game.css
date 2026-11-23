@@ -30,6 +30,11 @@ button:focus-visible{outline:3px solid #fff;outline-offset:4px}
 #cup-board tr>:first-child{text-align:left;overflow-wrap:anywhere}
 #cup-board tbody tr:first-child{color:#ffe6a0}
 #cup-board tbody td:last-child{font-weight:800}
+.offline-board{width:100%;border-collapse:collapse;margin:4px 0 13px;font-size:.81rem;font-variant-numeric:tabular-nums}
+.offline-board :is(td,th){padding:4px;text-align:right;border-bottom:1px solid #91d9c936}
+.offline-board tr>:first-child{text-align:left}
+.offline-board tr:first-child th,.offline-board td:last-child{color:#ffe6a0}
+#modal .card{max-height:calc(100dvh - 28px);overflow-y:auto}
 #cup-rules{margin:12px 0 16px;color:#beded5;font-size:13px}
 #cup-rules summary{cursor:pointer}
 #cup-leg{color:#ffe6a0;margin-right:.45em}

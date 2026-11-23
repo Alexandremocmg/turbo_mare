@@ -8,8 +8,7 @@ window.createTurboRoom = function createTurboRoom(game) {
   const leaseMs = 5000;
   const uidPattern = /^[A-Za-z0-9_-]{4,32}$/;
   const active = () => ['lobby','race','interval','results'].includes(stage);
-  const prizes=[10,8,6,4,2,1], intervalMs=10000;
-  const tracks=['baia','estaleiro','farol'];
+  const intervalMs=10000;
   let cupVersion=0, heats=0;
   let cup=false, leg=0, board=[], nextStart=0;
   const controls = new Map();
@@ -40,12 +39,6 @@ window.createTurboRoom = function createTurboRoom(game) {
   function publish(message) { send({...message,term}); }
   function sync() { publish({t:'lobby',members}); }
   const member = uid => members.find(m=>m.uid===uid);
-  const total=r=>r.scores.reduce((sum,v)=>sum+(v||0),0);
-  const finalPoints=r=>r.scores[heats-1]||0;
-  const compareScores=(a,b)=>total(b)-total(a)||finalPoints(b)-finalPoints(a);
-  function rankBoard(){
-    return board.slice().sort((a,b)=>compareScores(a,b)||a.slot-b.slot);
-  }
   function paintBoard(){
     const visible=cup && ['interval','results'].includes(stage);
     el('cup-board').hidden=!visible;
@@ -53,12 +46,12 @@ window.createTurboRoom = function createTurboRoom(game) {
     el('cup-farol-column').hidden=heats!==3;
     if(!visible)return;
     let place=0, previous;
-    el('cup-rows').replaceChildren(...rankBoard().map((r,i)=>{
-      if(!previous || compareScores(r,previous)!==0)place=i+1;
+    el('cup-rows').replaceChildren(...rankCup(board).map((r,i)=>{
+      if(!previous || compareCupScores(r,previous)!==0)place=i+1;
       previous=r;
       const row=document.createElement('tr');
       const label=place+'º '+r.name+(r.uid===selfId?' (você)':'');
-      for(const [j,text] of [label,...r.scores.map(v=>v??'—'),total(r)].entries()){
+      for(const [j,text] of [label,...r.scores.map(v=>v??'—'),cupTotal(r)].entries()){
         const cell=document.createElement(j===0?'th':'td');
         if(j===0)cell.scope='row';
         cell.textContent=String(text);row.append(cell);
@@ -100,9 +93,9 @@ window.createTurboRoom = function createTurboRoom(game) {
     if (stage==='interval')updateInterval();
     if (done) {
       if(cup){
-        const first=rankBoard()[0];
-        const winners=first?board.filter(r=>compareScores(r,first)===0):[];
-        const win=first && total(first)>0?(winners.length===1?first.name+' venceu a Copa':winners.map(r=>r.name).join(' e ')+' dividiram a vitória')+' com '+total(first)+' pontos. ':'Nenhum piloto marcou pontos. ';
+        const first=rankCup(board)[0];
+        const winners=first?board.filter(r=>compareCupScores(r,first)===0):[];
+        const win=first && cupTotal(first)>0?(winners.length===1?first.name+' venceu a Copa':winners.map(r=>r.name).join(' e ')+' dividiram a vitória')+' com '+cupTotal(first)+' pontos. ':'Nenhum piloto marcou pontos. ';
         note(win+(host?'Dispute a revanche com o mesmo convite.':'Aguarde a revanche nesta sala.'));
       } else if(quick) note(host ? 'Dispute outra corrida com os mesmos pilotos ou saia para procurar novos.' : 'Aguarde a próxima corrida ou saia para procurar outros pilotos.');
       else note(host ? 'Convide outros pilotos ou dispute uma nova corrida.' : 'Aguarde o anfitrião iniciar uma nova corrida.');
@@ -239,16 +232,12 @@ window.createTurboRoom = function createTurboRoom(game) {
     controls.clear(); latest=null; pendingStart=pendingEnd=false; stage = 'race'; standings = [];
     if (dialog.open) dialog.close();
     game.begin({host,slot,leaderSlot:legacy?0:member(hostId).slot,members:members.map(m=>({...m})),
-      track:cup?tracks[leg]:null,heats,bots});
+      track:cup?cupTracks[leg]:null,heats,bots});
   }
   function result(rows) {
     stage = 'results'; standings = rows; latest=null; pendingStart=pendingEnd=false;
     if(cup){
-      const ranked=rows.filter(row=>row.eligible===true);
-      for(const r of board){
-        const i=ranked.findIndex(row=>row.slot===r.slot);
-        r.scores[leg]=i>=0?prizes[i]:0;
-      }
+      scoreCupLeg(board,leg,rows);
       if(leg+1<heats){stage='interval';nextStart=performance.now()+intervalMs;}
     }
     game.reset(); modal(); paint();
@@ -265,7 +254,7 @@ window.createTurboRoom = function createTurboRoom(game) {
       if(cup && Array.isArray(m.board) && m.board.length<=limit && m.board.length &&
         m.board.every(r=>r && typeof r.name==='string' && uidPattern.test(r.uid) &&
           Number.isInteger(r.slot) && Array.isArray(r.scores) && r.scores.length===heats &&
-          r.scores.every(v=>v===0||prizes.includes(v)))){
+          r.scores.every(v=>v===0||cupPrizes.includes(v)))){
         board=m.board;stage='results';leg=heats-1;
       }
       heard(stamp);paint();return;

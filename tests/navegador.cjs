@@ -117,6 +117,16 @@ async function main() {
   }
   if (process.argv[2] === '--pwa') {
     const entry = new URL(process.argv[3]);
+    const testCup=process.argv.includes('--copa');
+    if(testCup){
+      // Advance simulations rapidly across the three time limits without rendering every frame.
+      await send('Page.addScriptToEvaluateOnNewDocument',{source:`
+        const nativeFrame=requestAnimationFrame.bind(window);
+        let stamp=performance.now();
+        window.requestAnimationFrame=callback=>nativeFrame(()=>callback(stamp+=310));
+        for(const method of ['drawArrays','drawElements','clear'])WebGLRenderingContext.prototype[method]=()=>{};
+      `});
+    }
     const navigations = [];
     socket.addEventListener('message', event => {
       const msg = JSON.parse(event.data);
@@ -144,11 +154,26 @@ async function main() {
     await send('Page.reload', {ignoreCache:false});
     await until("!document.documentElement?.dataset.beforeOfflineReload && !navigator.onLine && document.getElementById('cover-art')?.naturalWidth > 0 && document.getElementById('bay-art')?.naturalWidth > 0");
     assert.ok(navigations.some(res => res.fromServiceWorker && res.status === 200), 'Entrada offline pelo service worker');
-    await click('practice');
-    await until(racing);
+    if(testCup){
+      await click('offline-cup');
+      for(const [index,title] of ['Placar após a Baía','Placar após o Estaleiro','Pódio da Copa'].entries()){
+        await until(racing+" && document.getElementById('progress-name').textContent.startsWith('"+(index+1)+"/3')");
+        await until("document.getElementById('modal-title').textContent==="+JSON.stringify(title)+" && !document.getElementById('offline-board').hidden");
+        const rows=await evaluate("Array.from(document.querySelectorAll('#offline-rows tr'),row=>Array.from(row.cells,cell=>cell.textContent))");
+        assert.equal(rows.length,6);
+        assert.ok(rows.some(row=>Number(row[index+1])>0));
+        for(const row of rows)assert.equal(Number(row[4]),row.slice(1,4).reduce((sum,points)=>sum+(Number(points)||0),0));
+        await click('modal-main');
+      }
+      await until(racing+" && document.getElementById('progress-name').textContent.startsWith('1/3')");
+      assert.equal(await evaluate('navigator.onLine'),false);
+    }else{
+      await click('practice');
+      await until(racing);
+    }
     assert.equal(await evaluate("document.querySelector('canvas').getContext('webgl').getError()"), 0);
     assert.deepEqual(errors, []);
-    console.log('Manifesto instalável no Chromium e treino WebGL iniciado offline em ' + entry.href);
+    console.log('Manifesto instalável no Chromium e '+(testCup?'Copa e revanche testadas offline em ':'treino WebGL iniciado offline em ')+entry.href);
     return;
   }
   await send('Emulation.setDeviceMetricsOverride', {width:1365, height:768, deviceScaleFactor:1, mobile:false});

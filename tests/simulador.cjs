@@ -9,10 +9,14 @@ module.exports = function criarSimulador(createTurboRoom) {
   });
   const document = {
     body: {dataset: {}},
-    createElement: () => ({getContext: () => null}),
+    createElement: () => ({getContext: () => null,children:[],append(child){this.children.push(child);}}),
     getElementById(id) {
       if (!objects.has(id)) {
-        objects.set(id, {getContext: () => gl, style: {}, previousElementSibling: {}, replaceChildren() {}, addEventListener() {}, focus() {}, classList: {add() {}, remove() {}, contains: () => false}, append() {}});
+        const listeners=new Map();
+        objects.set(id, {getContext: () => gl, style: {}, previousElementSibling: {},
+          replaceChildren(...children){this.children=children;},
+          addEventListener(type,fn){listeners.set(type,fn);},click(){listeners.get('click')?.();},
+          focus() {}, classList: {add() {}, remove() {}, contains: () => false}, append() {}});
       }
       return objects.get(id);
     }
@@ -32,7 +36,7 @@ module.exports = function criarSimulador(createTurboRoom) {
       get finishers() { return finishers; }
     });
   `;
-  const script = ['farol.js','game.js'].map(file=>fs.readFileSync(path.join(__dirname,'../src',file),'utf8')).join('\n');
+  const script = ['cup.js','farol.js','game.js'].map(file=>fs.readFileSync(path.join(__dirname,'../src',file),'utf8')).join('\n');
   const frameStart = /  requestAnimationFrame\(frame\);\s*\}\s*$/;
   if (!frameStart.test(script)) throw new Error('O simulador não encontrou o início do loop principal.');
   let game;

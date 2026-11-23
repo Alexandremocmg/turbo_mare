@@ -15,7 +15,7 @@
     <div class="eyebrow">Circuito do Kraken</div>
     <h1>TURBO<span>MARÉ</span></h1>
     <p>Pegue os anéis de turbo e escape dos tentáculos para chegar entre os seis primeiros.</p>
-    <div class="menu-buttons"><button class="primary" id="play">Disputar corrida <span aria-hidden="true">▶</span></button><button id="quick">Partida rápida</button><button id="friends">Jogar com amigos</button><button id="practice">Treino livre</button><button id="crew-open">Pilotos</button></div>
+    <div class="menu-buttons"><button class="primary" id="play">Disputar corrida <span aria-hidden="true">▶</span></button><button class="secondary" id="offline-cup">Copa offline</button><button id="quick">Partida rápida</button><button id="friends">Jogar com amigos</button><button id="practice">Treino livre</button><button id="crew-open">Pilotos</button></div>
     <div class="menu-foot"><span><kbd>WASD</kbd> ou setas</span><span><kbd>Espaço</kbd> Pular</span><span><kbd>Shift</kbd> Mergulhar</span></div>
     <div class="app-tools"><button type="button" id="install-game" aria-controls="install-help" hidden>Instalar jogo</button><span id="offline-state" role="status" hidden>Pronto para jogar offline</span></div>
     <div id="install-help" hidden>No Safari, toque em Compartilhar e depois em Adicionar à Tela de Início.</div>
@@ -70,6 +70,7 @@
     <div class="eyebrow" id="modal-tag">Circuito do Kraken</div>
     <h2 id="modal-title"></h2>
     <p id="modal-text"></p>
+    <table class="offline-board" id="offline-board" hidden aria-label="Pontuação acumulada da Copa"><thead><tr><th scope="col">Piloto</th><th scope="col">Baía</th><th scope="col">Estaleiro</th><th scope="col">Farol</th><th scope="col">Total</th></tr></thead><tbody id="offline-rows"></tbody></table>
     <label id="quality-row" for="quality">Detalhe gráfico <select id="quality"><option value="auto">Automático</option><option value="high">Alto</option><option value="light">Leve</option></select></label>
     <div class="card-actions">
       <button class="primary" id="modal-main"></button>
@@ -81,6 +82,7 @@
 <p class="card" id="error" hidden></p>
 <img id="bay-art" hidden alt="" src="art/baia.png">
 <!-- PWA: install -->
+<script src="cup.js"></script>
 <script src="rooms.js"></script>
 <script src="farol.js"></script>
 <script src="game.js"></script>
