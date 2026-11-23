@@ -133,3 +133,25 @@ test('uma saída voluntária envia o estado final mesmo antes do próximo snapsh
   assert.equal(b.view.state.time,32);assert.equal(b.view.host,true);
   assert.deepEqual(b.view.departed,[0]);assert.equal(b.view.begins,1);assert.equal(b.view.resets,0);
 });
+
+test('um convite anterior à final do Farol mantém as duas provas da sala original',()=>{
+  const bus=relay(),key='d'.repeat(32);
+  const host=new bus.Socket('wss://itty.ws/c/turbo-mare-copa-1-'+key+'?announce=true&list=true&echo=true');
+  let members;
+  host.onmessage=event=>{
+    const {uid,message}=JSON.parse(event.data);
+    if(message?.t!=='hello')return;
+    members=[{uid:host.uid,slot:0,name:'Lua',pilot:0},{uid,slot:1,name:'Sol',pilot:1}];
+    host.send('\u001f'+uid+'\u001f'+JSON.stringify({t:'welcome',slot:1,members,term:0,round:0}));
+  };
+  const guest=browser(bus,'Sol','https://example.test/#sala='+key+'&copa=1');
+  for(let leg=0;leg<2;leg++){
+    host.send(JSON.stringify({t:'go',term:0,round:leg+1,members,leg}));bus.flush();
+    assert.equal(guest.view.track,['baia','estaleiro'][leg]);assert.equal(guest.view.heats,2);
+    const rows=members.map(m=>({...m,score:'Chegou',eligible:true}));
+    host.send(JSON.stringify({t:'end',term:0,round:leg+1,rows}));bus.flush();
+  }
+  assert.equal(guest.el('room-title').textContent,'Pódio da Copa');
+  assert.equal(guest.el('cup-farol-column').hidden,true);
+  assert.equal(guest.el('cup-rows').children[0].children.length,4);
+});

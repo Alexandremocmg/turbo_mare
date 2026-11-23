@@ -140,6 +140,7 @@ async function verify({send,evaluate,until,click,key,screenshot}) {
   if(role==='--host') {
     await go(entry);
     await until("document.readyState==='complete' && document.getElementById('cover-art')?.naturalWidth>0");
+    if(inCup)await wait('guest-loaded');
     await click('friends');
     await until("document.getElementById('room')?.open===true");
     await evaluate("document.getElementById('room-nick').value='Coral'");
@@ -169,6 +170,11 @@ async function verify({send,evaluate,until,click,key,screenshot}) {
     notify('invite-still-works');
     console.log('O convite original ainda encontra a sala depois da saída do criador.');
   } else if(role==='--guest') {
+    if(inCup){
+      await go(entry);
+      await until("document.readyState==='complete' && document.getElementById('cover-art')?.naturalWidth>0");
+      notify('guest-loaded');
+    }
     const invite=await wait('invite');await join(invite);
     await until("document.getElementById('room-title').textContent==='Sala de amigos'");
     notify('first-guest');
@@ -225,7 +231,8 @@ async function run() {
     } catch(error) { fs.writeFileSync(path.join(dir,'failed'),role);console.error(error.message);return 1; }
   }
   const quick=process.argv.includes('--rapida');
-  const jobs=[launch('--host'),launch('--guest',quick?null:'invite')];
+  const cup=process.argv.includes('--copa');
+  const jobs=[launch('--host',cup?'guest-loaded':null),launch('--guest',quick||cup?null:'invite')];
   if(!process.argv.includes('--copa'))jobs.push(launch('--friend',quick?null:'first-guest'));
   const codes=await Promise.all(jobs);
   for(const filename of fs.readdirSync(dir)) fs.unlinkSync(path.join(dir,filename));

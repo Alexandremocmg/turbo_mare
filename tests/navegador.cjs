@@ -29,7 +29,7 @@ let socket;
 async function main() {
   const file = path.join(profile, 'DevToolsActivePort');
   let port;
-  for (let i = 0; i < 150 && !port; i++) {
+  for (let i = 0; i < 450 && !port; i++) {
     if (chrome.exitCode !== null) throw new Error('Chrome encerrou durante a inicialização.');
     try {
       port = Number(fs.readFileSync(file, 'utf8').split('\n')[0]);
@@ -219,9 +219,12 @@ const deadline = setTimeout(() => chrome.kill(), 8 * 60 * 1000);
 chrome.stderr.resume();
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => {
   clearTimeout(deadline);
-  socket?.close();
-  chrome.kill();
+  const force=setTimeout(()=>{chrome.kill();chrome.stderr.destroy();},5000);
+  if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify({id:0,method:'Browser.close'}));
+  else chrome.kill();
   await exited;
+  clearTimeout(force);
+  socket?.close();
   if (path.dirname(profile) === output && path.basename(profile).startsWith('perfil-')) {
     fs.rmSync(profile, {recursive:true, force:true, maxRetries:6, retryDelay:250});
   }
