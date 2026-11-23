@@ -23,7 +23,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:4px}
 .app-tools button:focus-visible{outline:2px solid #ffbc42;outline-offset:2px}
 #offline-state::before{content:"";display:inline-block;width:7px;height:7px;margin-right:6px;background:#8cf0ba;border-radius:50%}
 #install-help{max-width:330px;margin-top:6px;background:#102a3aeb;color:#fff2d8;padding:8px 10px;border-radius:5px;font-size:13px}
-#friends,#room-copy,#room-leave,#race-leave{border:1px solid #9edbcd;border-radius:5px;background:#143c4c;color:#fff4d9;padding:10px 14px;font-weight:750}
+#quick,#friends,#room-copy,#room-bots,#room-leave,#race-leave{border:1px solid #9edbcd;border-radius:5px;background:#143c4c;color:#fff4d9;padding:10px 14px;font-weight:750}
 #room,#race-exit{box-sizing:border-box;width:min(430px,94vw);max-height:90dvh;overflow:auto;border:1px solid #8ad7bf;border-radius:16px;padding:clamp(18px,4vw,30px);background:#103644;color:#fff1d7;box-shadow:0 18px 65px #051c35aa}
 #room::backdrop,#race-exit::backdrop{background:#071c30a8}
 #room h2,#race-exit h2{font-size:clamp(25px,5vw,34px);line-height:1.1;margin:12px 0}
@@ -48,7 +48,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:4px}
 @media(min-width:621px){#cup-leg{display:none}}
 #room-ranks{position:absolute;top:76px;right:12px;max-width:min(250px,65vw);background:#102e40ed;border:1px solid #94cbb982;border-radius:6px;padding:6px 9px;font-size:12px;color:#fff2d8;pointer-events:auto}
 #room-ranks summary{cursor:pointer;font-weight:750}#race-list{margin:6px 0 0}#race-list li{padding:2px 0}
-@media(max-width:620px){.menu-buttons #friends{padding:9px}#room-ranks{top:65px}}
+@media(max-width:620px){.menu-buttons #friends,.menu-buttons #quick{padding:9px}#room-ranks{top:65px}}
 #scene{position:absolute;inset:0;background:linear-gradient(180deg,#24426d 0%,#8274a9 34%,#f4a68f 64%,#ffd5a7 84%,#f9be99 100%);overflow:hidden}
 #scene::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 73% 42%,#fff8c8 0 5.9%,#ffddaa 6% 7%,#ffdcb96b 9%,transparent 25%);pointer-events:none}
 body:not([data-mode=menu]) #scene{background:linear-gradient(180deg,#24426d,#7875a6 17%,#eda48e 40%,#ffd5a7)}
@@ -71,7 +71,7 @@ kbd{font-family:inherit;background:#e9fff123;border:1px solid #e9fff132;border-b
 .icon{background:#102d40e5;border:1px solid #e4fff34c;border-radius:8px;min-width:38px;height:38px;font-size:16px;font-weight:900;display:grid;place-items:center}
 .icon:hover,.secondary:hover{background:#245061}
 #settings{display:flex;gap:7px;position:absolute;right:max(17px,env(safe-area-inset-right));bottom:max(17px,env(safe-area-inset-bottom));z-index:4}
-#hud{position:absolute;inset:0;pointer-events:none;color:white}
+#hud{position:absolute;inset:0;pointer-events:none;color:white;z-index:4}
 .hud-top{position:absolute;left:clamp(12px,3vw,44px);right:clamp(12px,3vw,44px);top:max(13px,env(safe-area-inset-top));display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
 .hud-box{background:var(--glass);border:1px solid #e0fff442;border-radius:10px;padding:10px 13px;box-shadow:0 3px 14px #10334438;font-variant-numeric:tabular-nums}
 .hud-box small{color:#aae5db;text-transform:uppercase;letter-spacing:.11em;font-size:10px;font-weight:850;display:block;margin-bottom:2px}
@@ -86,12 +86,18 @@ kbd{font-family:inherit;background:#e9fff123;border:1px solid #e9fff132;border-b
 #toast{position:absolute;left:50%;top:20%;transform:translateX(-50%);padding:8px 15px;background:#123442ee;border:1px solid #a8e8c5;color:var(--lime);border-radius:7px;font-weight:850;font-size:13px;white-space:nowrap}
 #count{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%) rotate(-6deg);font-size:clamp(74px,14vw,155px);font-weight:1000;font-style:italic;line-height:1;color:var(--lime);text-shadow:5px 6px #182944,0 0 24px #0d37436b}
 #touch{display:none;position:absolute;inset:0;pointer-events:none;z-index:3}
-#stick{position:absolute;left:max(18px,env(safe-area-inset-left));bottom:max(21px,env(safe-area-inset-bottom));width:112px;height:112px;border:2px solid #e1fff39e;border-radius:50%;background:#102d4080;pointer-events:auto}
+#move-zone,#action-zone{position:absolute;top:0;bottom:0;pointer-events:auto;touch-action:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+#move-zone{left:0;width:50%}
+#action-zone{right:0;width:50%}
+#stick{position:absolute;left:max(18px,env(safe-area-inset-left));bottom:max(21px,env(safe-area-inset-bottom));width:112px;height:112px;border:2px solid #e1fff39e;border-radius:50%;background:#102d4080;pointer-events:none;opacity:.55;transition:opacity .15s}
+#stick.active{opacity:1;bottom:auto;transition:none}
 #nub{position:absolute;width:45px;height:45px;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:50%;background:#d3ffeed9;box-shadow:0 3px 0 #61968f}
-#actions{position:absolute;right:max(16px,env(safe-area-inset-right));bottom:max(66px,calc(env(safe-area-inset-bottom) + 53px));display:flex;align-items:flex-end;gap:8px;pointer-events:auto}
-#actions button{background:#142e43cf;border:1px solid #e1fff39e;border-radius:50%;width:65px;height:65px;font-weight:900;font-size:10px;text-transform:uppercase;box-shadow:0 3px 0 #0e2539;touch-action:none}
-#actions button:last-child{background:var(--lime);color:#193740;width:76px;height:76px}
-#actions span{display:block;font-size:21px;line-height:1.15}
+#action-hint{position:absolute;right:max(16px,env(safe-area-inset-right));bottom:max(74px,calc(env(safe-area-inset-bottom) + 60px));margin:0;padding:8px 12px;border:1px solid #e1fff35e;border-radius:8px;background:#142e4399;color:#fff8e7;font-size:11px;line-height:1.5;text-align:right;text-transform:uppercase;letter-spacing:.06em;pointer-events:none;opacity:.8;transition:opacity .6s}
+#action-hint b{color:var(--lime)}
+#touch.learned #action-hint{opacity:0}
+.tap-ring{position:absolute;width:74px;height:74px;margin:-37px 0 0 -37px;border:3px solid var(--lime);border-radius:50%;pointer-events:none;animation:tap-ring .35s ease-out forwards}
+.tap-ring.dive{border-color:var(--mint);border-width:5px}
+@keyframes tap-ring{from{transform:scale(.45);opacity:.95}to{transform:scale(1.25);opacity:0}}
 @media(pointer:coarse){#touch:not([hidden]){display:block}.menu-foot{display:none}}
 #modal{position:absolute;inset:0;display:grid;place-items:center;background:#071f30b8;z-index:6;padding:14px}
 .card{width:min(420px,100%);border-radius:17px;border:1px solid #b8f9dc62;background:#112f42;padding:clamp(20px,5vw,34px);box-shadow:0 12px 50px #061b30a0}
@@ -182,7 +188,7 @@ body[data-turbo="on"] #hud::before{opacity:1}
     <div class="eyebrow">Circuito do Kraken</div>
     <h1>TURBO<span>MARÉ</span></h1>
     <p>Pegue os anéis de turbo e escape dos tentáculos para chegar entre os seis primeiros.</p>
-    <div class="menu-buttons"><button class="primary" id="play">Disputar corrida <span aria-hidden="true">▶</span></button><button id="friends">Jogar com amigos</button><button id="practice">Treino livre</button><button id="crew-open">Pilotos</button></div>
+    <div class="menu-buttons"><button class="primary" id="play">Disputar corrida <span aria-hidden="true">▶</span></button><button id="quick">Partida rápida</button><button id="friends">Jogar com amigos</button><button id="practice">Treino livre</button><button id="crew-open">Pilotos</button></div>
     <div class="menu-foot"><span><kbd>WASD</kbd> ou setas</span><span><kbd>Espaço</kbd> Pular</span><span><kbd>Shift</kbd> Mergulhar</span></div>
     <div class="app-tools"><button type="button" id="install-game" aria-controls="install-help" hidden>Instalar jogo</button><span id="offline-state" role="status" hidden>Pronto para jogar offline</span></div>
     <div id="install-help" hidden>No Safari, toque em Compartilhar e depois em Adicionar à Tela de Início.</div>
@@ -200,7 +206,7 @@ body[data-turbo="on"] #hud::before{opacity:1}
   <ol id="room-list"></ol>
   <table id="cup-board" hidden aria-label="Pontuação da Copa das Marés"><thead><tr><th scope="col">Piloto</th><th scope="col">Baía</th><th scope="col">Estaleiro</th><th scope="col" id="cup-farol-column">Farol</th><th scope="col">Total</th></tr></thead><tbody id="cup-rows"></tbody></table>
   <details id="cup-rules" hidden><summary>Como pontuar</summary><p>Do 1º ao 6º lugar, as provas valem 10, 8, 6, 4, 2 e 1 ponto. Quem chega primeiro fica à frente. Ao acabar o tempo, quem alcançou um checkpoint também pontua pela distância percorrida. Em caso de empate na soma, vale a pontuação da última prova.</p></details>
-  <div class="room-actions"><button id="room-start" class="primary" hidden>Largar</button><button id="room-leave">Voltar</button></div>
+  <div class="room-actions"><button id="room-start" class="primary" hidden>Largar</button><button id="room-bots" hidden>Correr com bots</button><button id="room-leave">Voltar</button></div>
 </dialog>
 <dialog id="race-exit" aria-labelledby="exit-title"><h2 id="exit-title">Sair da corrida?</h2><p id="exit-info"></p><div class="room-actions"><button id="race-stay" class="primary">Continuar</button><button id="race-leave">Sair da sala</button></div></dialog>
 <section id="dock" aria-label="Escolha do piloto" hidden>
@@ -227,8 +233,9 @@ body[data-turbo="on"] #hud::before{opacity:1}
 </div>
 <div id="settings"><button class="icon" id="sound" aria-label="Desativar som" title="Desativar som">♫</button></div>
 <div id="touch" hidden>
-  <div id="stick" aria-label="Controle de direção"><div id="nub"></div></div>
-  <div id="actions"><button id="dive"><span aria-hidden="true">»</span>Mergulho</button><button id="jump"><span aria-hidden="true">↑</span>Pulo</button></div>
+  <div id="move-zone" aria-label="Direção: toque e arraste em qualquer ponto da metade esquerda"></div>
+  <div id="action-zone" aria-label="Ação: um toque pula, dois toques mergulham"><p id="action-hint"><b>1 toque</b> pula<br><b>2 toques</b> mergulha</p></div>
+  <div id="stick" aria-hidden="true"><div id="nub"></div></div>
 </div>
 <div id="celebrate" aria-hidden="true"></div>
 <section id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
@@ -286,6 +293,21 @@ body[data-turbo="on"] #hud::before{opacity:1}
   });
 
   if ('serviceWorker' in navigator) {
+    // A versão nova assume assim que termina de baixar. A página recarrega no menu,
+    // nunca no meio de uma corrida ou com a sala online aberta.
+    const updating = !!navigator.serviceWorker.controller;
+    let waiting = false;
+    const reloadWhenIdle = () => {
+      const idle = ['menu', 'dock'].includes(document.body.dataset.mode) && !document.querySelector('dialog[open]');
+      waiting = !idle;
+      if (idle) location.reload();
+    };
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (updating) reloadWhenIdle(); });
+    new MutationObserver(() => { if (waiting) reloadWhenIdle(); })
+      .observe(document.body, {attributes: true, attributeFilter: ['data-mode']});
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') navigator.serviceWorker.getRegistration().then(r => r?.update()).catch(() => {});
+    });
     navigator.serviceWorker.register('./sw.js', {updateViaCache: 'none'})
       .then(() => navigator.serviceWorker.ready)
       .then(() => { status.hidden = false; })
@@ -313,6 +335,12 @@ window.createTurboRoom = function createTurboRoom(game) {
   let stage = 'closed', roomKey = '', round = 0, timer = 0, standings = [];
   let selfId='', legacy=false, term=0, monitor=0, lastLeaderStamp=0, lastSeen=0, latest=null;
   let pendingStart=false, pendingEnd=false, lastHello=0;
+  // Partida rápida: um canal público reúne quem procura corrida. Quem espera há mais tempo
+  // monta uma sala comum e chama os outros; bots completam o grid.
+  const gatherMs=5000, joinMs=8000, staleMs=4500, aloneMs=12000;
+  let quick=false, seekSocket=null, seekTimer=0, seekSelf='', seekSince=0, lastSeek=0;
+  let seekStarted=0, gatherAt=0, expected=0, autoStartAt=0, matchFor=null;
+  const seekers=new Map();
   const nickname = text => (typeof text === 'string' ? text.trim().replace(/[\u0000-\u001f\u007f]/g,'').slice(0,18) : '') || 'Piloto';
   const validPilot = value => Number.isInteger(value) && value >= 0 && value < 4 ? value : 0;
   const invited = () => new URLSearchParams(location.hash.slice(1)).get('sala');
@@ -361,11 +389,12 @@ window.createTurboRoom = function createTurboRoom(game) {
     note((leg===0?'Estaleiro à Deriva':'Farol da Ressaca')+' começa em '+seconds+' s.');
   }
   function paintList() {
-    const rows = stage === 'results' ? standings : members;
+    const seeking = stage === 'seeking';
+    const rows = stage === 'results' ? standings : seeking ? seekList() : members;
     el('room-list').replaceChildren(...rows.map(m => {
       const item = document.createElement('li'), name = document.createElement('strong'), detail = document.createElement('span');
-      name.textContent = m.name + (m.slot === slot ? ' (você)' : '');
-      detail.textContent = stage === 'results' ? m.score : ((legacy ? m.slot===0 : m.uid===hostId) ? 'Anfitrião' : 'Conectado');
+      name.textContent = m.name + ((seeking ? m.uid === seekSelf : m.slot === slot) ? ' (você)' : '');
+      detail.textContent = seeking ? 'Procurando' : stage === 'results' ? m.score : ((legacy ? m.slot===0 : m.uid===hostId) ? 'Anfitrião' : 'Conectado');
       item.append(name,detail);
       return item;
     }));
@@ -373,17 +402,19 @@ window.createTurboRoom = function createTurboRoom(game) {
   function paint() {
     const setup = stage === 'setup' || stage === 'failed', lobby = stage === 'lobby', done = stage === 'results';
     el('room-nick-label').hidden = el('room-enter').hidden = !setup;
-    el('room-invite').hidden = !(lobby || done);
-    el('room-start').hidden = !host || !(lobby || done);
-    el('room-start').disabled = members.length < 2;
+    el('room-invite').hidden = quick || !(lobby || done);
+    el('room-start').hidden = !host || !(lobby || done) || (quick && lobby);
+    el('room-start').disabled = members.length < (quick ? 1 : 2);
+    if (stage !== 'seeking') el('room-bots').hidden = true;
     el('room-start').textContent = done ? (cup?'Revanche':'Nova corrida') : (cup?'Largar na Baía':'Largar');
-    el('room-series').textContent=cup?'Copa das Marés':'Circuito do Kraken';
+    el('room-series').textContent=cup?'Copa das Marés':quick?'Corrida online':'Circuito do Kraken';
     el('cup-rules').hidden=!cup || !(lobby || done || stage==='interval');
-    el('room-title').textContent = stage==='interval'?(leg===0?'Placar após a Baía':'Placar após o Estaleiro'):done ? (cup?'Pódio da Copa':'Resultado da sala') : lobby ? 'Sala de amigos' : 'Jogar com amigos';
-    el('room-leave').textContent = setup ? 'Voltar' : 'Sair da sala';
-    el('room-enter').textContent = roomKey && !host ? 'Entrar na sala' : 'Criar sala';
+    el('room-title').textContent = stage==='interval'?(leg===0?'Placar após a Baía':'Placar após o Estaleiro'):done ? (cup?'Pódio da Copa':quick?'Resultado da corrida':'Resultado da sala') : quick ? 'Partida rápida' : lobby ? 'Sala de amigos' : 'Jogar com amigos';
+    el('room-leave').textContent = setup ? 'Voltar' : stage==='seeking' ? 'Cancelar' : 'Sair da sala';
+    el('room-enter').textContent = quick ? 'Procurar corrida' : roomKey && !host ? 'Entrar na sala' : 'Criar sala';
     if (lobby || done) el('room-url').value = invite();
-    if (lobby) note((cup?(heats===3?'Baía, Estaleiro e Farol da Ressaca. ':'Baía do Kraken e Estaleiro à Deriva. '):'')+(host ? members.length < 2 ? 'Envie o convite a um amigo para liberar a largada.' : 'Todos a bordo. Você já pode dar a largada.' : 'Você está na sala. Aguarde a largada do anfitrião.'));
+    if (lobby && quick) note('Pilotos entrando na sala. A largada é automática.');
+    else if (lobby) note((cup?(heats===3?'Baía, Estaleiro e Farol da Ressaca. ':'Baía do Kraken e Estaleiro à Deriva. '):'')+(host ? members.length < 2 ? 'Envie o convite a um amigo para liberar a largada.' : 'Todos a bordo. Você já pode dar a largada.' : 'Você está na sala. Aguarde a largada do anfitrião.'));
     if (stage==='interval')updateInterval();
     if (done) {
       if(cup){
@@ -391,7 +422,8 @@ window.createTurboRoom = function createTurboRoom(game) {
         const winners=first?board.filter(r=>compareScores(r,first)===0):[];
         const win=first && total(first)>0?(winners.length===1?first.name+' venceu a Copa':winners.map(r=>r.name).join(' e ')+' dividiram a vitória')+' com '+total(first)+' pontos. ':'Nenhum piloto marcou pontos. ';
         note(win+(host?'Dispute a revanche com o mesmo convite.':'Aguarde a revanche nesta sala.'));
-      } else note(host ? 'Convide outros pilotos ou dispute uma nova corrida.' : 'Aguarde o anfitrião iniciar uma nova corrida.');
+      } else if(quick) note(host ? 'Dispute outra corrida com os mesmos pilotos ou saia para procurar novos.' : 'Aguarde a próxima corrida ou saia para procurar outros pilotos.');
+      else note(host ? 'Convide outros pilotos ou dispute uma nova corrida.' : 'Aguarde o anfitrião iniciar uma nova corrida.');
     }
     paintList();paintBoard();
   }
@@ -402,7 +434,8 @@ window.createTurboRoom = function createTurboRoom(game) {
     if (old) old.close();
   }
   function fail(text) {
-    const retryAsGuest = active() && !legacy;
+    stopSeek(); matchFor=null;
+    const retryAsGuest = active() && !legacy && !quick;
     disconnect(); members = []; standings = []; stage = 'failed';
     if(retryAsGuest) host=false;
     else if(host) roomKey='';
@@ -410,7 +443,7 @@ window.createTurboRoom = function createTurboRoom(game) {
   }
   function leave() {
     if (active()) announceExit();
-    disconnect(); stage = 'closed'; host = false; slot = -1; roomKey = ''; members = []; standings = [];
+    stopSeek(); disconnect(); stage = 'closed'; host = false; slot = -1; roomKey = ''; members = []; standings = []; quick = false; matchFor = null;
     if (invited()) { const url = new URL(location.href); url.hash = ''; history.replaceState(null,'',url); }
     if (dialog.open) dialog.close();
     game.reset();
@@ -418,7 +451,7 @@ window.createTurboRoom = function createTurboRoom(game) {
   function setup(key) {
     if (stage !== 'closed') return;
     [roomKey,hostId=''] = validKey(key) ? key.split('.') : ['', ''];
-    legacy=!!hostId; host = !roomKey; stage = 'setup';
+    legacy=!!hostId; host = !roomKey; stage = 'setup'; quick = false;
     const version=new URLSearchParams(location.hash.slice(1)).get('copa');
     cupVersion=host?2:legacy?0:version==='2'?2:version==='1'?1:0;
     cup=cupVersion>0;heats=cupVersion===2?3:cup?2:0;
@@ -472,6 +505,7 @@ window.createTurboRoom = function createTurboRoom(game) {
       if(host && performance.now()>=nextStart)startRound(leg+1);
     }
     if(host) {
+      if(quick && stage==='lobby' && (members.length>=expected || performance.now()>=autoStartAt)) startRound(0);
       if(stage!=='race') publish({t:'pulse'});
       return;
     }
@@ -515,15 +549,15 @@ window.createTurboRoom = function createTurboRoom(game) {
   }
   function startRound(index) {
     if(pendingStart)return;
-    pendingStart=true;publish({t:'go',round:round+1,members,leg:index});
+    pendingStart=true;publish({t:'go',round:round+1,members,leg:index,bots:quick});
   }
-  function begin(index) {
+  function begin(index,bots=false) {
     leg=index;
     if(cup && leg===0)board=members.map(({uid,slot,name})=>({uid,slot,name,scores:Array(heats).fill(null)}));
     controls.clear(); latest=null; pendingStart=pendingEnd=false; stage = 'race'; standings = [];
     if (dialog.open) dialog.close();
     game.begin({host,slot,leaderSlot:legacy?0:member(hostId).slot,members:members.map(m=>({...m})),
-      track:cup?tracks[leg]:null,heats});
+      track:cup?tracks[leg]:null,heats,bots});
   }
   function result(rows) {
     stage = 'results'; standings = rows; latest=null; pendingStart=pendingEnd=false;
@@ -589,19 +623,101 @@ window.createTurboRoom = function createTurboRoom(game) {
     } else if(m.t==='go' && ['lobby','interval','results'].includes(stage) && validMembers(m.members) && m.members.some(p=>p.slot===slot) && Number.isInteger(m.round) &&
       (!cup || (m.round===round+1 && m.leg===(stage==='interval'?leg+1:0)))) {
       members=cup?m.members.filter(m=>member(m.uid)):m.members;
-      round=m.round;begin(cup?m.leg:0);
+      round=m.round;begin(cup?m.leg:0,!cup && m.bots===true);
     } else if(m.t==='state' && stage==='race' && m.round===round && !host) {
       remember(m.v);
-    } else if(m.t==='end' && stage==='race' && m.round===round && Array.isArray(m.rows) && m.rows.length<=limit && m.rows.every(r=>r && typeof r.name==='string' && typeof r.score==='string')) {
+    } else if(m.t==='end' && stage==='race' && m.round===round && Array.isArray(m.rows) && m.rows.length<=10 && m.rows.every(r=>r && typeof r.name==='string' && typeof r.score==='string')) {
       result(m.rows);
     }
   }
+  function reachable() {
+    if (!navigator.onLine) { note('Conecte-se à internet para jogar online.'); return false; }
+    if (!/^https?:$/.test(location.protocol) || !window.WebSocket) {
+      note('Abra o jogo pelo GitHub Pages em um navegador atualizado.'); return false;
+    }
+    return true;
+  }
+  function seekList() {
+    return [...seekers.values()].sort((a,b)=>a.since-b.since||(a.uid<b.uid?-1:a.uid>b.uid?1:0));
+  }
+  function stopSeek() {
+    const old=seekSocket;
+    seekSocket=null; clearInterval(seekTimer); seekers.clear(); gatherAt=0;
+    if(old) old.close();
+  }
+  function seekPing() {
+    lastSeek=performance.now();
+    if(seekSocket?.readyState===WebSocket.OPEN && seekSelf)
+      seekSocket.send(JSON.stringify({t:'seek',since:seekSince,name:nickname(el('room-nick').value)}));
+  }
+  function seekTick() {
+    if(stage!=='seeking') return;
+    const now=performance.now();
+    for(const [uid,s] of seekers) if(uid!==seekSelf && now-s.seen>staleMs) seekers.delete(uid);
+    if(now-lastSeek>1500) seekPing();
+    const list=seekList();
+    el('room-bots').hidden=list.length>1 || now-seekStarted<aloneMs;
+    if(list.length<2) {
+      gatherAt=0;
+      note(now-seekStarted<aloneMs ? 'Procurando pilotos online…' : 'Ninguém procurando corrida agora. Continue esperando ou corra contra os bots.');
+    } else {
+      if(!gatherAt) gatherAt=now+gatherMs;
+      const leader=list[0].uid===seekSelf;
+      note(list.length+' pilotos encontrados. '+(leader ? 'Largada em '+Math.max(1,Math.ceil((gatherAt-now)/1000))+' s.' : 'Montando a corrida…'));
+      if(leader && (now>=gatherAt || list.length>=limit)) {
+        matchFor=list.slice(0,limit).map(s=>s.uid);
+        clearInterval(seekTimer);
+        stage='setup'; quick=true; host=true; roomKey=''; legacy=false; cup=false;
+        connect();
+        return;
+      }
+    }
+    paintList();
+  }
+  function seek() {
+    if (!['setup','failed'].includes(stage) || !reachable()) return;
+    try { localStorage.setItem('mare-apelido',nickname(el('room-nick').value)); } catch {}
+    stopSeek(); disconnect();
+    stage='seeking'; seekSelf=''; seekStarted=performance.now(); matchFor=null; members=[]; standings=[];
+    paint(); note('Procurando pilotos online…');
+    let current;
+    try { current=new WebSocket('wss://itty.ws/c/turbo-mare-publico-v1?announce=true&echo=true'); }
+    catch { stage='failed'; paint(); note('Não foi possível procurar corrida. Tente novamente.'); return; }
+    seekSocket=current;
+    seekTimer=setInterval(seekTick,500);
+    const lost=()=>{if(seekSocket===current){stopSeek();stage='failed';paint();note('A busca por pilotos caiu. Confira a rede e tente de novo.');}};
+    current.onclose=lost; current.onerror=lost;
+    current.onmessage=event=>{
+      if(seekSocket!==current || typeof event.data!=='string' || event.data.length>2000) return;
+      let packet;
+      try { packet=JSON.parse(event.data); } catch { return; }
+      const {uid,type,self,message}=packet||{};
+      const stamp=Number(packet?.date);
+      if(typeof uid!=='string' || !uidPattern.test(uid) || !Number.isFinite(stamp)) return;
+      if(type==='join' && self) {
+        seekSelf=uid; seekSince=stamp;
+        seekers.set(uid,{uid,name:nickname(el('room-nick').value),since:stamp,seen:performance.now()});
+        seekPing();
+      } else if(type==='leave') seekers.delete(uid);
+      else if(message && typeof message==='object' && !type) {
+        if(message.t==='seek' && Number.isFinite(message.since)) {
+          seekers.set(uid,{uid,name:nickname(message.name),since:message.since,seen:performance.now()});
+        } else if(message.t==='match' && Array.isArray(message.uids)) {
+          if(uid!==seekSelf && message.uids.includes(seekSelf) && validKey(message.key) && !message.key.includes('.')) {
+            stopSeek();
+            stage='setup'; quick=true; host=false; legacy=false; cup=false; roomKey=message.key; matchFor=null;
+            connect();
+            return;
+          }
+          for(const other of message.uids) if(other!==seekSelf) seekers.delete(other);
+        }
+      }
+      if(stage==='seeking') paintList();
+    };
+  }
   function connect() {
     if (!['setup','failed'].includes(stage)) return;
-    if (!navigator.onLine) { note('Conecte-se à internet para abrir uma sala.'); return; }
-    if (!/^https?:$/.test(location.protocol) || !window.WebSocket) {
-      note('Abra o jogo pelo GitHub Pages em um navegador atualizado.'); return;
-    }
+    if (!reachable()) return;
     const name = nickname(el('room-nick').value);
     try { localStorage.setItem('mare-apelido',name); } catch {}
     if (host) roomKey = Array.from(crypto.getRandomValues(new Uint8Array(16)), n=>n.toString(16).padStart(2,'0')).join('');
@@ -627,6 +743,13 @@ window.createTurboRoom = function createTurboRoom(game) {
         if (host) {
           hostId=uid;clearTimeout(timer);members=[{uid,slot:0,name,pilot:game.pilot(),hidden:document.hidden}];
           stage='lobby';heard(stamp);paint();
+          if(matchFor) {
+            expected=matchFor.length; autoStartAt=performance.now()+joinMs;
+            seekSocket?.send(JSON.stringify({t:'match',key:roomKey,uids:matchFor}));
+            const old=seekSocket; seekSocket=null; clearInterval(seekTimer); seekers.clear();
+            setTimeout(()=>old?.close(),400);
+            matchFor=null;
+          }
         } else if (Array.isArray(packet.users) && !packet.users.some(u=>legacy?u.uid===hostId:u.uid!==selfId)) {
           fail('Sala não encontrada. Peça um novo convite.');
         } else hello();
@@ -640,7 +763,15 @@ window.createTurboRoom = function createTurboRoom(game) {
   }
   try { el('room-nick').value=localStorage.getItem('mare-apelido')||''; } catch {}
   el('friends').addEventListener('click',()=>setup(invited()));
-  el('room-form').addEventListener('submit',e=>{e.preventDefault();connect();});
+  el('room-form').addEventListener('submit',e=>{e.preventDefault();if(quick)seek();else connect();});
+  el('quick').addEventListener('click',()=>{
+    if (stage !== 'closed') return;
+    quick=true; cup=false; legacy=false; host=true; roomKey=''; stage='setup';
+    modal(); paint();
+    note('Corra contra quem estiver online agora. Bots completam o grid.');
+    el('room-nick').focus();
+  });
+  el('room-bots').addEventListener('click',()=>{leave();el('play').click();});
   el('room-leave').addEventListener('click', leave);
   dialog.addEventListener('cancel',e=>{e.preventDefault();leave();});
   el('room-copy').addEventListener('click',async ()=>{
@@ -648,7 +779,7 @@ window.createTurboRoom = function createTurboRoom(game) {
     catch { el('room-url').select(); note('Selecione e copie o link para convidar seus amigos.'); }
   });
   el('room-start').addEventListener('click',()=>{
-    if (!host || !['lobby','results'].includes(stage) || members.length < 2) return;
+    if (!host || !['lobby','results'].includes(stage) || members.length < (quick ? 1 : 2)) return;
     startRound(0);
   });
   document.addEventListener('visibilitychange',presence);
@@ -1845,10 +1976,11 @@ function run() {
   const gaps = [{edge:26,landing:30},{edge:48,landing:51.5},
     {edge:73,landing:76},{edge:96.5,landing:100}];
   const keys = new Set();
-  const stick = {x:0,z:0,id:null};
+  const stick = {x:0,z:0,id:null,ox:0,oy:0};
   const camera = {x:0,y:0,z:0,tx:0,ty:0,tz:0,ready:false};
   let racers, player, finishers, particles, mode = 'menu', resumeMode;
   let countdown, elapsed, obstacleTime, menuTime = 0, lastCount, lastStamp, accumulator=0;
+  let lastTap=-1, tapCount=0;
   let jumpPressed=0, divePressed=0, notice=0, gapHint=false, best=0, muted=false, audio=null;
   try {
     best = Number(localStorage.getItem('turbo-mare-kraken-best')) || 0;
@@ -1859,6 +1991,7 @@ function run() {
   const timeResult = (time) => time.toFixed(2).replace('.',',')+' s';
 
   let training=false, beatIndex=-1, online=null, room=null, lastNetSend=0, rankSignature='';
+  const botNames=['Bot Coral','Bot Recife','Bot Âncora','Bot Farol'];
   const netFields=['x','y','z','vx','vy','vz','a','stride','bank','landing','hit','stun','dive','flight','boost','wait','cp','result','raceTime','falls'];
   function freshRace() {
     selectTrack(online?.track);
@@ -1877,10 +2010,13 @@ function run() {
     }));
     if(training) racers=racers.slice(0,1);
     if (online) {
-      racers = racers.filter(r=>online.members.some(m=>m.slot===r.i));
+      // Na partida rápida, os lugares 7 a 10 do grid são bots simulados pelo anfitrião.
+      racers = racers.filter(r=>online.members.some(m=>m.slot===r.i) || (online.bots && r.i>=6));
       for(const r of racers) {
         const m=online.members.find(m=>m.slot===r.i);
-        r.name=m.name; r.pilot=m.pilot; r.left=false; r.reaction=.2; r.bias=0;
+        r.left=false;
+        if(!m) {r.bot=true; r.name=botNames[r.i-6]; r.pilot=r.i%4; continue;}
+        r.name=m.name; r.pilot=m.pilot; r.reaction=.2; r.bias=0;
       }
     }
     player = online ? racers.find(r=>r.i===online.slot) : racers[0];
@@ -2047,37 +2183,81 @@ function run() {
   function clearControls() {
     keys.clear();
     jumpPressed=divePressed=0;
+    lastTap=-1;
     stick.id=null;
     moveStick();
+  }
+  // Metade esquerda: o joystick nasce onde o dedo encosta e o acompanha quando ele passa do limite.
+  // Metade direita: um toque pula na hora e um segundo toque logo depois mergulha.
+  const STICK_RADIUS=32, STICK_FOLLOW=46, DOUBLE_TAP=300;
+  function placeStick(x,y) {
+    const box=$('stick'), half=box.offsetWidth/2||56;
+    stick.ox=clamp(x,half*.6,innerWidth-half*.6);
+    stick.oy=clamp(y,half*.6,innerHeight-half*.6);
+    box.classList.add('active');
+    box.style.left=stick.ox-half+'px';
+    box.style.top=stick.oy-half+'px';
   }
   function moveStick(event) {
     let dx=0,dy=0;
     if(event) {
-      const box=$('stick').getBoundingClientRect();
-      dx=event.clientX-box.left-box.width/2;
-      dy=event.clientY-box.top-box.height/2;
+      dx=event.clientX-stick.ox;
+      dy=event.clientY-stick.oy;
+      const length=Math.hypot(dx,dy);
+      if(length>STICK_FOLLOW) {
+        const pull=(length-STICK_FOLLOW)/length;
+        placeStick(stick.ox+dx*pull,stick.oy+dy*pull);
+        dx=event.clientX-stick.ox;
+        dy=event.clientY-stick.oy;
+      }
+    } else {
+      const box=$('stick');
+      box.classList.remove('active');
+      box.style.left=box.style.top='';
     }
-    const radius=32, length=Math.hypot(dx,dy), scale=Math.max(radius,length);
+    const length=Math.hypot(dx,dy), scale=Math.max(STICK_RADIUS,length);
     stick.x=dx/scale;
     stick.z=-dy/scale;
-    $('nub').style.transform='translate(-50%, -50%) translate('+stick.x*radius+'px,'+(-stick.z*radius)+'px)';
+    $('nub').style.transform='translate(-50%, -50%) translate('+stick.x*STICK_RADIUS+'px,'+(-stick.z*STICK_RADIUS)+'px)';
   }
-  $('stick').addEventListener('pointerdown',event=>{
+  const moveZone=$('move-zone');
+  moveZone.addEventListener('pointerdown',event=>{
+    event.preventDefault();
     if (stick.id!==null) return;
     stick.id=event.pointerId;
-    $('stick').setPointerCapture(event.pointerId);
+    moveZone.setPointerCapture(event.pointerId);
+    placeStick(event.clientX,event.clientY);
     moveStick(event);
   });
-  $('stick').addEventListener('pointermove',event=>{if(stick.id===event.pointerId) moveStick(event);});
-  for(const type of ['pointerup','pointercancel','lostpointercapture']) $('stick').addEventListener(type,event=>{
+  moveZone.addEventListener('pointermove',event=>{if(stick.id===event.pointerId) moveStick(event);});
+  for(const type of ['pointerup','pointercancel','lostpointercapture']) moveZone.addEventListener(type,event=>{
     if(stick.id!==event.pointerId) return;
     stick.id=null;
     moveStick();
   });
-  for(const [id,action] of [['jump',()=>jumpPressed=.145],['dive',()=>divePressed=.14]]) {
-    $(id).addEventListener('pointerdown',event=>{event.preventDefault();action();});
-    $(id).addEventListener('click',event=>{if(event.detail===0) action();});
+  function tapRing(x,y,dive) {
+    const ring=document.createElement('i');
+    ring.className='tap-ring'+(dive?' dive':'');
+    ring.style.left=x+'px';
+    ring.style.top=y+'px';
+    $('touch').append(ring);
+    ring.addEventListener('animationend',()=>ring.remove());
   }
+  $('action-zone').addEventListener('pointerdown',event=>{
+    event.preventDefault();
+    const dive=lastTap>=0 && event.timeStamp-lastTap<DOUBLE_TAP;
+    if(dive) {
+      jumpPressed=0;
+      divePressed=.14;
+      lastTap=-1;
+    } else {
+      jumpPressed=.145;
+      lastTap=event.timeStamp;
+    }
+    tapRing(event.clientX,event.clientY,dive);
+    if(++tapCount===6) $('touch').classList.add('learned');
+  });
+  for(const id of ['move-zone','action-zone']) $(id).addEventListener('contextmenu',event=>event.preventDefault());
 
   function floor(x,z) {
     if(atFarol)return farol.floor(x,z,obstacleTime);
@@ -2191,19 +2371,19 @@ function run() {
     r.hit=Math.max(0,r.hit-dt);
     r.nextJump=Math.max(0,r.nextJump-dt);
     r.coyote=r.ground?.105:Math.max(0,r.coyote-dt);
-    let [x,z,jump,dive]=r===player?playerInput():online?room.control(r.i,dt):botInput(r);
+    let [x,z,jump,dive]=r===player?playerInput():online&&!r.bot?room.control(r.i,dt):botInput(r);
     const magnitude=Math.hypot(x,z);
     if(magnitude>1) {x/=magnitude;z/=magnitude;}
     if(r.flight>0){
       r.flight=Math.max(0,r.flight-dt);
-      if(r===player || online) r.vx=clamp(r.vx+x*dt*3,-7,7);
+      if(r===player || (online && !r.bot)) r.vx=clamp(r.vx+x*dt*3,-7,7);
     } else if(r.stun<=0) {
       if(jump && r.coyote>0 && r.dive<=0) {
         r.vy=9.35;
         r.ground=false;
         r.coyote=0;
         r.nextJump=.39;
-        if(online && r!==player) room.consume(r.i,'jump');
+        if(online && r!==player && !r.bot) room.consume(r.i,'jump');
         if(r===player) {jumpPressed=0;tone(320,.13,'triangle',0,1.65);}
       }
       if(dive && r.dive<=0 && !r.dove && r.y>-.32) {
@@ -2217,11 +2397,11 @@ function run() {
         r.coyote=0;
         r.dive=.54;
         r.dove=true;
-        if(online && r!==player) room.consume(r.i,'dive');
+        if(online && r!==player && !r.bot) room.consume(r.i,'dive');
         if(r===player) {divePressed=0;tone(285,.17,'triangle',0,.57);}
       }
       if(r.dive<=0) {
-        const speed=(online||r===player?8.7:r.speed)*(r.boost>0?1.53:1);
+        const speed=(r.bot||(!online&&r!==player)?r.speed:8.7)*(r.boost>0?1.53:1);
         const a=1-Math.exp(-dt*(r.ground?18:8));
         r.vx=mix(r.vx,x*speed,a);
         r.vz=mix(r.vz,z*speed,a);
@@ -2412,7 +2592,7 @@ function run() {
       gapHint=true;
       notify(matchMedia('(pointer:coarse)').matches?'Pule para atravessar o vão':'Espaço para atravessar o vão');
     }
-    if (online && (racers.every(r=>r.result||r.left) || elapsed>=TIME_LIMIT)) {
+    if (online && (racers.every(r=>r.result||r.left||r.bot) || elapsed>=TIME_LIMIT)) {
       room.finish(roomOrder().map(r=>({name:r.name,slot:r.i,score:roomScore(r),eligible:!!r.result||(!r.left&&r.cp>0)})));
       return;
     }

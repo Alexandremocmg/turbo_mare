@@ -1016,10 +1016,11 @@ function run() {
   const gaps = [{edge:26,landing:30},{edge:48,landing:51.5},
     {edge:73,landing:76},{edge:96.5,landing:100}];
   const keys = new Set();
-  const stick = {x:0,z:0,id:null};
+  const stick = {x:0,z:0,id:null,ox:0,oy:0};
   const camera = {x:0,y:0,z:0,tx:0,ty:0,tz:0,ready:false};
   let racers, player, finishers, particles, mode = 'menu', resumeMode;
   let countdown, elapsed, obstacleTime, menuTime = 0, lastCount, lastStamp, accumulator=0;
+  let lastTap=-1, tapCount=0;
   let jumpPressed=0, divePressed=0, notice=0, gapHint=false, best=0, muted=false, audio=null;
   try {
     best = Number(localStorage.getItem('turbo-mare-kraken-best')) || 0;
@@ -1030,6 +1031,7 @@ function run() {
   const timeResult = (time) => time.toFixed(2).replace('.',',')+' s';
 
   let training=false, beatIndex=-1, online=null, room=null, lastNetSend=0, rankSignature='';
+  const botNames=['Bot Coral','Bot Recife','Bot Âncora','Bot Farol'];
   const netFields=['x','y','z','vx','vy','vz','a','stride','bank','landing','hit','stun','dive','flight','boost','wait','cp','result','raceTime','falls'];
   function freshRace() {
     selectTrack(online?.track);
@@ -1048,10 +1050,13 @@ function run() {
     }));
     if(training) racers=racers.slice(0,1);
     if (online) {
-      racers = racers.filter(r=>online.members.some(m=>m.slot===r.i));
+      // Na partida rápida, os lugares 7 a 10 do grid são bots simulados pelo anfitrião.
+      racers = racers.filter(r=>online.members.some(m=>m.slot===r.i) || (online.bots && r.i>=6));
       for(const r of racers) {
         const m=online.members.find(m=>m.slot===r.i);
-        r.name=m.name; r.pilot=m.pilot; r.left=false; r.reaction=.2; r.bias=0;
+        r.left=false;
+        if(!m) {r.bot=true; r.name=botNames[r.i-6]; r.pilot=r.i%4; continue;}
+        r.name=m.name; r.pilot=m.pilot; r.reaction=.2; r.bias=0;
       }
     }
     player = online ? racers.find(r=>r.i===online.slot) : racers[0];
@@ -1218,37 +1223,81 @@ function run() {
   function clearControls() {
     keys.clear();
     jumpPressed=divePressed=0;
+    lastTap=-1;
     stick.id=null;
     moveStick();
+  }
+  // Metade esquerda: o joystick nasce onde o dedo encosta e o acompanha quando ele passa do limite.
+  // Metade direita: um toque pula na hora e um segundo toque logo depois mergulha.
+  const STICK_RADIUS=32, STICK_FOLLOW=46, DOUBLE_TAP=300;
+  function placeStick(x,y) {
+    const box=$('stick'), half=box.offsetWidth/2||56;
+    stick.ox=clamp(x,half*.6,innerWidth-half*.6);
+    stick.oy=clamp(y,half*.6,innerHeight-half*.6);
+    box.classList.add('active');
+    box.style.left=stick.ox-half+'px';
+    box.style.top=stick.oy-half+'px';
   }
   function moveStick(event) {
     let dx=0,dy=0;
     if(event) {
-      const box=$('stick').getBoundingClientRect();
-      dx=event.clientX-box.left-box.width/2;
-      dy=event.clientY-box.top-box.height/2;
+      dx=event.clientX-stick.ox;
+      dy=event.clientY-stick.oy;
+      const length=Math.hypot(dx,dy);
+      if(length>STICK_FOLLOW) {
+        const pull=(length-STICK_FOLLOW)/length;
+        placeStick(stick.ox+dx*pull,stick.oy+dy*pull);
+        dx=event.clientX-stick.ox;
+        dy=event.clientY-stick.oy;
+      }
+    } else {
+      const box=$('stick');
+      box.classList.remove('active');
+      box.style.left=box.style.top='';
     }
-    const radius=32, length=Math.hypot(dx,dy), scale=Math.max(radius,length);
+    const length=Math.hypot(dx,dy), scale=Math.max(STICK_RADIUS,length);
     stick.x=dx/scale;
     stick.z=-dy/scale;
-    $('nub').style.transform='translate(-50%, -50%) translate('+stick.x*radius+'px,'+(-stick.z*radius)+'px)';
+    $('nub').style.transform='translate(-50%, -50%) translate('+stick.x*STICK_RADIUS+'px,'+(-stick.z*STICK_RADIUS)+'px)';
   }
-  $('stick').addEventListener('pointerdown',event=>{
+  const moveZone=$('move-zone');
+  moveZone.addEventListener('pointerdown',event=>{
+    event.preventDefault();
     if (stick.id!==null) return;
     stick.id=event.pointerId;
-    $('stick').setPointerCapture(event.pointerId);
+    moveZone.setPointerCapture(event.pointerId);
+    placeStick(event.clientX,event.clientY);
     moveStick(event);
   });
-  $('stick').addEventListener('pointermove',event=>{if(stick.id===event.pointerId) moveStick(event);});
-  for(const type of ['pointerup','pointercancel','lostpointercapture']) $('stick').addEventListener(type,event=>{
+  moveZone.addEventListener('pointermove',event=>{if(stick.id===event.pointerId) moveStick(event);});
+  for(const type of ['pointerup','pointercancel','lostpointercapture']) moveZone.addEventListener(type,event=>{
     if(stick.id!==event.pointerId) return;
     stick.id=null;
     moveStick();
   });
-  for(const [id,action] of [['jump',()=>jumpPressed=.145],['dive',()=>divePressed=.14]]) {
-    $(id).addEventListener('pointerdown',event=>{event.preventDefault();action();});
-    $(id).addEventListener('click',event=>{if(event.detail===0) action();});
+  function tapRing(x,y,dive) {
+    const ring=document.createElement('i');
+    ring.className='tap-ring'+(dive?' dive':'');
+    ring.style.left=x+'px';
+    ring.style.top=y+'px';
+    $('touch').append(ring);
+    ring.addEventListener('animationend',()=>ring.remove());
   }
+  $('action-zone').addEventListener('pointerdown',event=>{
+    event.preventDefault();
+    const dive=lastTap>=0 && event.timeStamp-lastTap<DOUBLE_TAP;
+    if(dive) {
+      jumpPressed=0;
+      divePressed=.14;
+      lastTap=-1;
+    } else {
+      jumpPressed=.145;
+      lastTap=event.timeStamp;
+    }
+    tapRing(event.clientX,event.clientY,dive);
+    if(++tapCount===6) $('touch').classList.add('learned');
+  });
+  for(const id of ['move-zone','action-zone']) $(id).addEventListener('contextmenu',event=>event.preventDefault());
 
   function floor(x,z) {
     if(atFarol)return farol.floor(x,z,obstacleTime);
@@ -1362,19 +1411,19 @@ function run() {
     r.hit=Math.max(0,r.hit-dt);
     r.nextJump=Math.max(0,r.nextJump-dt);
     r.coyote=r.ground?.105:Math.max(0,r.coyote-dt);
-    let [x,z,jump,dive]=r===player?playerInput():online?room.control(r.i,dt):botInput(r);
+    let [x,z,jump,dive]=r===player?playerInput():online&&!r.bot?room.control(r.i,dt):botInput(r);
     const magnitude=Math.hypot(x,z);
     if(magnitude>1) {x/=magnitude;z/=magnitude;}
     if(r.flight>0){
       r.flight=Math.max(0,r.flight-dt);
-      if(r===player || online) r.vx=clamp(r.vx+x*dt*3,-7,7);
+      if(r===player || (online && !r.bot)) r.vx=clamp(r.vx+x*dt*3,-7,7);
     } else if(r.stun<=0) {
       if(jump && r.coyote>0 && r.dive<=0) {
         r.vy=9.35;
         r.ground=false;
         r.coyote=0;
         r.nextJump=.39;
-        if(online && r!==player) room.consume(r.i,'jump');
+        if(online && r!==player && !r.bot) room.consume(r.i,'jump');
         if(r===player) {jumpPressed=0;tone(320,.13,'triangle',0,1.65);}
       }
       if(dive && r.dive<=0 && !r.dove && r.y>-.32) {
@@ -1388,11 +1437,11 @@ function run() {
         r.coyote=0;
         r.dive=.54;
         r.dove=true;
-        if(online && r!==player) room.consume(r.i,'dive');
+        if(online && r!==player && !r.bot) room.consume(r.i,'dive');
         if(r===player) {divePressed=0;tone(285,.17,'triangle',0,.57);}
       }
       if(r.dive<=0) {
-        const speed=(online||r===player?8.7:r.speed)*(r.boost>0?1.53:1);
+        const speed=(r.bot||(!online&&r!==player)?r.speed:8.7)*(r.boost>0?1.53:1);
         const a=1-Math.exp(-dt*(r.ground?18:8));
         r.vx=mix(r.vx,x*speed,a);
         r.vz=mix(r.vz,z*speed,a);
@@ -1583,7 +1632,7 @@ function run() {
       gapHint=true;
       notify(matchMedia('(pointer:coarse)').matches?'Pule para atravessar o vão':'Espaço para atravessar o vão');
     }
-    if (online && (racers.every(r=>r.result||r.left) || elapsed>=TIME_LIMIT)) {
+    if (online && (racers.every(r=>r.result||r.left||r.bot) || elapsed>=TIME_LIMIT)) {
       room.finish(roomOrder().map(r=>({name:r.name,slot:r.i,score:roomScore(r),eligible:!!r.result||(!r.left&&r.cp>0)})));
       return;
     }

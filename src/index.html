@@ -15,7 +15,7 @@
     <div class="eyebrow">Circuito do Kraken</div>
     <h1>TURBO<span>MARÉ</span></h1>
     <p>Pegue os anéis de turbo e escape dos tentáculos para chegar entre os seis primeiros.</p>
-    <div class="menu-buttons"><button class="primary" id="play">Disputar corrida <span aria-hidden="true">▶</span></button><button id="friends">Jogar com amigos</button><button id="practice">Treino livre</button><button id="crew-open">Pilotos</button></div>
+    <div class="menu-buttons"><button class="primary" id="play">Disputar corrida <span aria-hidden="true">▶</span></button><button id="quick">Partida rápida</button><button id="friends">Jogar com amigos</button><button id="practice">Treino livre</button><button id="crew-open">Pilotos</button></div>
     <div class="menu-foot"><span><kbd>WASD</kbd> ou setas</span><span><kbd>Espaço</kbd> Pular</span><span><kbd>Shift</kbd> Mergulhar</span></div>
     <div class="app-tools"><button type="button" id="install-game" aria-controls="install-help" hidden>Instalar jogo</button><span id="offline-state" role="status" hidden>Pronto para jogar offline</span></div>
     <div id="install-help" hidden>No Safari, toque em Compartilhar e depois em Adicionar à Tela de Início.</div>
@@ -33,7 +33,7 @@
   <ol id="room-list"></ol>
   <table id="cup-board" hidden aria-label="Pontuação da Copa das Marés"><thead><tr><th scope="col">Piloto</th><th scope="col">Baía</th><th scope="col">Estaleiro</th><th scope="col" id="cup-farol-column">Farol</th><th scope="col">Total</th></tr></thead><tbody id="cup-rows"></tbody></table>
   <details id="cup-rules" hidden><summary>Como pontuar</summary><p>Do 1º ao 6º lugar, as provas valem 10, 8, 6, 4, 2 e 1 ponto. Quem chega primeiro fica à frente. Ao acabar o tempo, quem alcançou um checkpoint também pontua pela distância percorrida. Em caso de empate na soma, vale a pontuação da última prova.</p></details>
-  <div class="room-actions"><button id="room-start" class="primary" hidden>Largar</button><button id="room-leave">Voltar</button></div>
+  <div class="room-actions"><button id="room-start" class="primary" hidden>Largar</button><button id="room-bots" hidden>Correr com bots</button><button id="room-leave">Voltar</button></div>
 </dialog>
 <dialog id="race-exit" aria-labelledby="exit-title"><h2 id="exit-title">Sair da corrida?</h2><p id="exit-info"></p><div class="room-actions"><button id="race-stay" class="primary">Continuar</button><button id="race-leave">Sair da sala</button></div></dialog>
 <section id="dock" aria-label="Escolha do piloto" hidden>
@@ -60,8 +60,9 @@
 </div>
 <div id="settings"><button class="icon" id="sound" aria-label="Desativar som" title="Desativar som">♫</button></div>
 <div id="touch" hidden>
-  <div id="stick" aria-label="Controle de direção"><div id="nub"></div></div>
-  <div id="actions"><button id="dive"><span aria-hidden="true">»</span>Mergulho</button><button id="jump"><span aria-hidden="true">↑</span>Pulo</button></div>
+  <div id="move-zone" aria-label="Direção: toque e arraste em qualquer ponto da metade esquerda"></div>
+  <div id="action-zone" aria-label="Ação: um toque pula, dois toques mergulham"><p id="action-hint"><b>1 toque</b> pula<br><b>2 toques</b> mergulha</p></div>
+  <div id="stick" aria-hidden="true"><div id="nub"></div></div>
 </div>
 <div id="celebrate" aria-hidden="true"></div>
 <section id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>

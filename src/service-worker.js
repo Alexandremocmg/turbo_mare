@@ -7,7 +7,7 @@ const assets = __PRECACHE_FILES__.map(file => new URL(file, scope).href);
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(cacheName).then(cache =>
     cache.addAll(assets.map(url => new Request(url, {cache: 'reload'})))
-  ));
+  ).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', event => {

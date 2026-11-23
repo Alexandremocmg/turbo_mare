@@ -183,15 +183,36 @@ async function main() {
   await send('Emulation.setDeviceMetricsOverride', {width:390, height:844, deviceScaleFactor:1, mobile:true});
   await send('Emulation.setTouchEmulationEnabled', {enabled:true, maxTouchPoints:3});
   await click('play');
-  await until(racing + " && document.getElementById('stick').getBoundingClientRect().width > 0");
-  const point = await evaluate("(()=>{const r = document.getElementById('stick').getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2-36};})()");
-  await send('Input.dispatchTouchEvent', {type:'touchStart',touchPoints:[point]});
+  await until(racing + " && document.getElementById('move-zone').getBoundingClientRect().width > 0");
+  // O joystick nasce onde o dedo toca, em qualquer ponto da metade esquerda.
+  const finger = {x:120, y:430};
+  await send('Input.dispatchTouchEvent', {type:'touchStart',touchPoints:[finger]});
+  const origin = await evaluate("(()=>{const r = document.getElementById('stick').getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2};})()");
+  assert.ok(Math.hypot(origin.x - finger.x, origin.y - finger.y) < 2, 'Joystick centrado no toque: ' + JSON.stringify(origin));
+  await send('Input.dispatchTouchEvent', {type:'touchMove',touchPoints:[{x:finger.x, y:finger.y - 40}]});
   await until(moving);
   await send('Input.dispatchTouchEvent', {type:'touchEnd',touchPoints:[]});
+  // Metade direita: um toque pula e dois toques seguidos mergulham.
+  const tap = async (x, y) => {
+    await send('Input.dispatchTouchEvent', {type:'touchStart',touchPoints:[{x, y}]});
+    await send('Input.dispatchTouchEvent', {type:'touchEnd',touchPoints:[]});
+  };
+  await tap(300, 500);
+  assert.equal(await evaluate("document.querySelectorAll('.tap-ring:not(.dive)').length"), 1, 'Um toque à direita pula');
+  // Com WebGL por software cada toque emulado leva segundos; o duplo toque é disparado na página no ritmo real.
+  await evaluate(`(async()=>{
+    const zone = document.getElementById('action-zone');
+    const press = () => zone.dispatchEvent(new PointerEvent('pointerdown', {pointerId:7, pointerType:'touch', clientX:300, clientY:500, bubbles:true, cancelable:true}));
+    press();
+    await new Promise(done => setTimeout(done, 120));
+    press();
+  })()`);
+  assert.equal(await evaluate("document.querySelectorAll('.tap-ring.dive').length"), 1, 'Dois toques à direita mergulham');
+  await until("!document.getElementById('stick').classList.contains('active')");
   await screenshot('celular');
   assert.equal(await evaluate("document.querySelector('canvas').getContext('webgl').getError()"), 0);
   assert.deepEqual(errors, []);
-  console.log('Verificados quatro pilotos, corrida, teclado, pausa, retomada, toque emulado e renderização WebGL. Capturas em artifacts/.');
+  console.log('Verificados quatro pilotos, corrida, teclado, pausa, retomada, joystick flutuante, toque e duplo toque emulados e renderização WebGL. Capturas em artifacts/.');
 }
 
 const deadline = setTimeout(() => chrome.kill(), 8 * 60 * 1000);
